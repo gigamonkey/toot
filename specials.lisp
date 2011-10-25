@@ -229,13 +229,7 @@ encode cookie values.")
   "The default connection timeout used when an acceptor is reading
 from and writing to a socket stream.")
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (define-symbol-macro *supports-threads-p* bt:*supports-threads-p*))
-
-(defvar *global-session-db-lock*
-  (load-time-value (and *supports-threads-p* (make-lock "global-session-db-lock")))
-  "A global lock to prevent two threads from modifying *session-db* at
-the same time \(or NIL for Lisps which don't have threads).")
+(defvar *default-taskmaster-class* (if bt:*supports-threads-p* 'thread-per-connection-taskmaster 'single-threaded-taskmaster))
 
 (defconstant +new-connection-wait-time+ 2
   "Time in seconds to wait for a new connection to arrive before

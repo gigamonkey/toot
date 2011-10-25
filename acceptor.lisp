@@ -56,8 +56,7 @@
     :port 80
     :name (gensym)
     :listen-backlog 50
-    :taskmaster (make-instance (cond (*supports-threads-p* 'thread-per-connection-taskmaster)
-                                     (t 'single-threaded-taskmaster)))
+    :taskmaster (make-instance *default-taskmaster-class*)
     :output-chunking-p t
     :input-chunking-p t
     :persistent-connections-p t
