@@ -41,7 +41,6 @@
    (post-parameters :initform nil :reader post-parameters)
    (script-name :initform nil :reader script-name)
    (query-string :initform nil :reader query-string)
-   (session :initform nil :accessor session)
    (aux-data :initform nil :accessor aux-data)
    (raw-post-data :initform nil)))
 
