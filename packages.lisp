@@ -114,8 +114,6 @@
            #:acceptor-persistent-connections-p
            #:acceptor-port
            #:acceptor-read-timeout
-           #:acceptor-reply-class
-           #:acceptor-request-class
            #:acceptor-ssl-p
            #-:hunchentoot-no-ssl #:acceptor-ssl-certificate-file               
            #-:hunchentoot-no-ssl #:acceptor-ssl-privatekey-file

@@ -34,8 +34,6 @@
   ((port :initarg :port :reader acceptor-port)
    (address :initarg :address :reader acceptor-address)
    (name :initarg :name :accessor acceptor-name)
-   (request-class :initarg :request-class :accessor acceptor-request-class)
-   (reply-class :initarg :reply-class :accessor acceptor-reply-class)
    (taskmaster :initarg :taskmaster :reader acceptor-taskmaster)
    (output-chunking-p :initarg :output-chunking-p :accessor acceptor-output-chunking-p)
    (input-chunking-p :initarg :input-chunking-p :accessor acceptor-input-chunking-p)
@@ -57,8 +55,6 @@
     :address nil
     :port 80
     :name (gensym)
-    :request-class 'request
-    :reply-class 'reply
     :listen-backlog 50
     :taskmaster (make-instance (cond (*supports-threads-p* 'thread-per-connection-taskmaster)
                                      (t 'single-threaded-taskmaster)))
@@ -168,7 +164,7 @@
                       (return))
                     ;; bind per-request special variables, then process the
                     ;; request - note that *ACCEPTOR* was bound above already
-                    (let ((*reply* (make-instance (acceptor-reply-class *acceptor*)))
+                    (let ((*reply* (make-instance 'reply))
                           (transfer-encodings (cdr (assoc* :transfer-encoding headers-in))))
                       (when transfer-encodings
                         (setq transfer-encodings
@@ -183,7 +179,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
                       (multiple-value-bind (remote-addr remote-port)
                           (get-peer-address-and-port socket)
                         (with-acceptor-request-count-incremented (*acceptor*)
-                          (process-request (make-instance (acceptor-request-class *acceptor*)
+                          (process-request (make-instance 'request
                                              :acceptor *acceptor*
                                              :remote-addr remote-addr
                                              :remote-port remote-port
