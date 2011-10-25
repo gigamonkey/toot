@@ -221,10 +221,4 @@
            #:thread-per-connection-taskmaster
            #:url-decode
            #:url-encode
-           #:user-agent
-           #:within-request-p))
-
-(defpackage :simple-hunchentoot
-  (:use #:cl)
-  (:export #:start-server
-           #:stop-server))
+           #:user-agent))

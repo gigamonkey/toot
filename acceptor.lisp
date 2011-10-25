@@ -116,11 +116,6 @@
   (setf (acceptor-listen-socket acceptor) nil)
   acceptor)
 
-(defun initialize-connection-stream (acceptor stream)
- (declare (ignore acceptor))
- ;; default method does nothing
- stream)
-
 (defun reset-connection-stream (acceptor stream)
   (declare (ignore acceptor))
   ;; turn chunking off at this point
