@@ -73,8 +73,7 @@ for diagnostic output.")
                (:file "headers")
                (:file "set-timeouts")
                (:file "taskmaster")
-               (:file "acceptor")
-               #-:hunchentoot-no-ssl (:file "ssl")))
+               (:file "acceptor")))
 
 (defsystem :hunchentoot-test
   :components ((:module "test"

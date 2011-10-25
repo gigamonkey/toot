@@ -49,7 +49,8 @@
    (access-log-destination :initarg :access-log-destination :accessor acceptor-access-log-destination)
    (message-log-destination :initarg :message-log-destination :accessor acceptor-message-log-destination)
    (error-template-directory :initarg :error-template-directory :accessor acceptor-error-template-directory)
-   (document-root :initarg :document-root :accessor acceptor-document-root))
+   (document-root :initarg :document-root :accessor acceptor-document-root)
+   (ssl-adapter :initarg :ssl-adapter :accessor ssl-adapter))
 
   (:default-initargs
     :address nil
@@ -65,6 +66,7 @@
     :access-log-destination *error-output*
     :message-log-destination *error-output*
     :document-root (load-time-value (default-document-directory))
+    :ssl-adapter nil
     :error-template-directory (load-time-value (default-document-directory "errors/"))))
 
 (defmethod print-object ((acceptor acceptor) stream)
@@ -72,13 +74,27 @@
     (format stream "\(host ~A, port ~A)"
             (or (acceptor-address acceptor) "*") (acceptor-port acceptor))))
 
-;; Only generic for SSL-ACCEPTOR
-(defgeneric initialize-connection-stream (acceptor stream))
+;; SSL
 
-;; Only generic for SSL-ACCEPTOR
-(defgeneric acceptor-ssl-p (acceptor))
+(defclass ssl-adapter ()
+  ((ssl-certificate-file :initarg :ssl-certificate-file :reader ssl-certificate-file)
+   (ssl-private-key-file :initarg :ssl-private-key-file :reader ssl-private-key-file)
+   (ssl-private-key-password :initform nil :initarg :ssl-private-key-password :reader ssl-private-key-password)))
 
-;; general implementation
+(defmethod initialize-instance :after ((adapter ssl-adapter) &key &allow-other-keys)
+  ;; OpenSSL doesn't know much about Lisp pathnames...
+  (with-slots (ssl-private-key-file ssl-certificate-file) adapter
+    (setf ssl-private-key-file (namestring (truename ssl-private-key-file)))
+    (setf ssl-certificate-file (namestring (truename ssl-certificate-file)))))
+
+(defun setup-ssl-stream (adapter stream)
+  ;; attach SSL to the stream if necessary
+  (with-slots (ssl-certificate-file ssl-private-key-file ssl-private-key-password) adapter
+    (cl+ssl:make-ssl-server-stream 
+     stream
+     :certificate ssl-certificate-file
+     :key ssl-private-key-file
+    :password ssl-private-key-password)))
 
 (defun start (acceptor)
   (setf (acceptor-shutdown-p acceptor) nil)
@@ -100,7 +116,7 @@
   (setf (acceptor-listen-socket acceptor) nil)
   acceptor)
 
-(defmethod initialize-connection-stream ((acceptor acceptor) stream)
+(defun initialize-connection-stream (acceptor stream)
  (declare (ignore acceptor))
  ;; default method does nothing
  stream)
@@ -146,8 +162,9 @@
                   (lambda (cond)
                     (log-message* *lisp-warnings-log-level* "Warning while processing connection: ~A" cond))))
     (with-mapped-conditions ()
-      (let ((*hunchentoot-stream*
-             (initialize-connection-stream *acceptor* (make-socket-stream socket *acceptor*))))
+      (let ((*hunchentoot-stream* (make-socket-stream socket *acceptor*)))
+        (when (ssl-adapter *acceptor*)
+          (setf *hunchentoot-stream* (setup-ssl-stream (ssl-adapter *acceptor*) *hunchentoot-stream*)))
         (unwind-protect
              ;; process requests until either the acceptor is shut down,
              ;; *CLOSE-HUNCHENTOOT-STREAM* has been set to T by the
@@ -199,12 +216,6 @@ chunked encoding, but acceptor is configured to not use it.")))))
               (force-output *hunchentoot-stream*))
             (ignore-errors*
               (close *hunchentoot-stream* :abort t))))))))
-
-
-
-
-  
-(defmethod acceptor-ssl-p ((acceptor t)) nil)
 
 (defun acceptor-log-access (acceptor &key return-code)
 

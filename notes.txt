@@ -17,6 +17,8 @@ HTTP server—create-prefix-dispatcher, etc.
 
 Senselessly removing all :documentation just to have less to look at.
 
+De-genericizing.
+
 * Reorganization ideas
 
 Acceptor should not know about SSL—or maybe it should and we should
@@ -42,6 +44,12 @@ Get rid of foo* functions. (Will presumably happen if *reply* and *request* are 
 Where is the proper place for session handling? Get rid of sessions
 machinery?
 
+Break out logging into a separate object.
+
 * Threading
 
 create-request-handler-thread assumes that we will create 
+
+* Bugs?
+
+If you connect to an SSL acceptor with HTTP it hangs. Seems like something else should happen.

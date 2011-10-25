@@ -316,7 +316,7 @@ not a chunked stream."
 
 (defun ssl-p (&optional (acceptor *acceptor*))
   "Whether the current connection to the client is secure."
-  (acceptor-ssl-p acceptor))
+  (ssl-adapter acceptor))
 
 (defmacro with-mapped-conditions (() &body body)
   "Run BODY with usocket condition mapping in effect, i.e. platform specific network errors will be

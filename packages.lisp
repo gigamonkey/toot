@@ -114,10 +114,6 @@
            #:acceptor-persistent-connections-p
            #:acceptor-port
            #:acceptor-read-timeout
-           #:acceptor-ssl-p
-           #-:hunchentoot-no-ssl #:acceptor-ssl-certificate-file               
-           #-:hunchentoot-no-ssl #:acceptor-ssl-privatekey-file
-           #-:hunchentoot-no-ssl #:acceptor-ssl-privatekey-password
            #:acceptor-status-message
            #:acceptor-write-timeout
            #:authorization
@@ -173,7 +169,6 @@
            #:log-message*
            #:maybe-invoke-debugger
            #:mime-type
-           #-:hunchentoot-no-ssl #:ssl-acceptor
            #:no-cache
            #:parameter
            #:parameter-error
