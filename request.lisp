@@ -1,5 +1,3 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Package: HUNCHENTOOT; Base: 10 -*-
-;;; $Header: /usr/local/cvsrep/hunchentoot/request.lisp,v 1.35 2008/02/13 16:02:18 edi Exp $
 
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz.  All rights reserved.
 
@@ -30,83 +28,22 @@
 (in-package :hunchentoot)
 
 (defclass request ()
-  ((acceptor :initarg :acceptor
-             :documentation "The acceptor which created this request
-object."
-             :reader request-acceptor)
-   (headers-in :initarg :headers-in
-               :documentation "An alist of the incoming headers."
-               :reader headers-in)
-   (method :initarg :method
-           :documentation "The request method as a keyword."
-           :reader request-method)
-   (uri :initarg :uri
-        :documentation "The request URI as a string."
-        :reader request-uri)
-   (server-protocol :initarg :server-protocol
-                    :documentation "The HTTP protocol as a keyword."
-                    :reader server-protocol)
-   (remote-addr :initarg :remote-addr
-                :documentation "The IP address of the client that
-initiated this request."
-                :reader remote-addr)
-   (remote-port :initarg :remote-port
-                :documentation "The TCP port number of the client
-socket from which this request originated."
-                :reader remote-port)
-   (content-stream :initarg :content-stream
-                   :reader content-stream
-                   :documentation "A stream from which the request
-body can be read if there is one.")
-   (cookies-in :initform nil
-               :documentation "An alist of the cookies sent by the client."
-               :reader cookies-in)
-   (get-parameters :initform nil
-                   :documentation "An alist of the GET parameters sent
-by the client."
-                   :reader get-parameters)
-   (post-parameters :initform nil
-                    :documentation "An alist of the POST parameters
-sent by the client."
-                    :reader post-parameters)
-   (script-name :initform nil
-                :documentation "The URI requested by the client without
-the query string."
-                :reader script-name)
-   (query-string :initform nil
-                 :documentation "The query string of this request."
-                 :reader query-string)
-   (session :initform nil
-            :accessor session
-            :documentation "The session object associated with this
-request.")
-   (aux-data :initform nil
-             :accessor aux-data
-             :documentation "Used to keep a user-modifiable alist with
-arbitrary data during the request.")
-   (raw-post-data :initform nil
-                  :documentation "The raw string sent as the body of a
-POST request, populated only if not a multipart/form-data request."))
-  (:documentation "Objects of this class hold all the information
-about an incoming request.  They are created automatically by
-acceptors and can be accessed by the corresponding handler.
-
-You should not mess with the slots of these objects directly, but you
-can subclass REQUEST in order to implement your own behaviour.  See
-the REQUEST-CLASS slot of the ACCEPTOR class."))
-
-(defgeneric process-request (request)
-  (:documentation "This function is called by PROCESS-CONNECTION after
-the incoming headers have been read.  It calls HANDLE-REQUEST to
-select and call a handler and sends the output of this handler to the
-client using START-OUTPUT.  Note that PROCESS-CONNECTION is called
-once per connection and loops in case of a persistent connection while
-PROCESS-REQUEST is called anew for each request.
-
-Essentially, you can view process-request as a thin wrapper around
-HANDLE-REQUEST.
-
-The return value of this function is ignored."))
+  ((acceptor :initarg :acceptor :reader request-acceptor)
+   (headers-in :initarg :headers-in :reader headers-in)
+   (method :initarg :method :reader request-method)
+   (uri :initarg :uri :reader request-uri)
+   (server-protocol :initarg :server-protocol :reader server-protocol)
+   (remote-addr :initarg :remote-addr :reader remote-addr)
+   (remote-port :initarg :remote-port :reader remote-port)
+   (content-stream :initarg :content-stream :reader content-stream)
+   (cookies-in :initform nil :reader cookies-in)
+   (get-parameters :initform nil :reader get-parameters)
+   (post-parameters :initform nil :reader post-parameters)
+   (script-name :initform nil :reader script-name)
+   (query-string :initform nil :reader query-string)
+   (session :initform nil :accessor session)
+   (aux-data :initform nil :accessor aux-data)
+   (raw-post-data :initform nil)))
 
 (defun convert-hack (string external-format)
   "The rfc2388 package is buggy in that it operates on a character
@@ -179,7 +116,7 @@ already been read."
   "The only initarg for a REQUEST object is :HEADERS-IN.  All other
 slot values are computed in this :AFTER method."
   (declare (ignore init-args))
-  (with-slots (headers-in cookies-in get-parameters script-name query-string session)
+  (with-slots (headers-in cookies-in get-parameters script-name query-string)
       request
     (handler-case*
         (progn
@@ -201,19 +138,16 @@ slot values are computed in this :AFTER method."
                 cookies-in
                 (form-url-encoded-list-to-alist (split "\\s*[,;]\\s*" (cdr (assoc :cookie headers-in
                                                                                   :test #'eq)))
-                                                +utf-8+)
-                session (session-verify request)
-                *session* session))
+                                                +utf-8+)))
       (error (condition)
         (log-message* :error "Error when creating REQUEST object: ~A" condition)
         ;; we assume it's not our fault...
         (setf (return-code*) +http-bad-request+)))))
 
-(defmethod process-request (request)
-  "Standard implementation for processing a request.  You should not
-change or replace this functionality unless you know what you're
-doing."
-  (catch 'request-processed ; used by HTTP HEAD handling to end request processing in a HEAD request (see START-OUTPUT)
+(defun process-request (request)
+  (catch 'request-processed ;; used by HTTP HEAD handling to end
+                            ;; request processing in a HEAD request
+                            ;; (see START-OUTPUT)
     (let (*tmp-files*
           *headers-sent*
           (*request* request))
@@ -253,10 +187,6 @@ doing."
             ;; file, so ignore errors that happen during deletion
             (ignore-errors*
               (delete-file path))))))))
-
-(defun within-request-p ()
-  "True if we're in the context of a request, otherwise nil."
-  (and (boundp '*request*) *request*))
 
 (defun parse-multipart-form-data (request external-format)
   "Parse the REQUEST body as multipart/form-data, assuming that its

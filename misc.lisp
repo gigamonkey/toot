@@ -1,5 +1,3 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Package: HUNCHENTOOT; Base: 10 -*-
-;;; $Header: /usr/local/cvsrep/hunchentoot/misc.lisp,v 1.17 2008/03/17 11:40:25 edi Exp $
 
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz. All rights reserved.
 
@@ -28,72 +26,6 @@
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 (in-package :hunchentoot)
-
-(let ((scanner-hash (make-hash-table :test #'equal)))
-  (defun scanner-for-get-param (param-name)
-    "Returns a CL-PPCRE scanner which matches a GET parameter in a
-URL.  Scanners are memoized in SCANNER-HASH once they are created."
-    (or (gethash param-name scanner-hash)
-        (setf (gethash param-name scanner-hash)
-                (create-scanner
-                 `(:alternation
-                   ;; session=value at end of URL
-                   (:sequence
-                    (:char-class #\? #\&)
-                    ,param-name
-                    #\=
-                    (:greedy-repetition 0 nil (:inverted-char-class #\&))
-                    :end-anchor)
-                   ;; session=value with other parameters following
-                   (:sequence
-                    (:register (:char-class #\? #\&))
-                    ,param-name
-                    #\=
-                    (:greedy-repetition 0 nil (:inverted-char-class #\&))
-                    #\&))))))
-  (defun add-cookie-value-to-url (url &key
-                                      (cookie-name (session-cookie-name *acceptor*))
-                                      (value (when-let (session (session *request*))
-                                               (session-cookie-value session)))
-                                      (replace-ampersands-p t))
-    "Removes all GET parameters named COOKIE-NAME from URL and then
-adds a new GET parameter with the name COOKIE-NAME and the value
-VALUE.  If REPLACE-AMPERSANDS-P is true all literal ampersands in URL
-are replaced with '&amp;'. The resulting URL is returned."
-    (unless url
-      ;; see URL-REWRITE:*URL-REWRITE-FILL-TAGS*
-      (setq url (request-uri *request*)))
-    (setq url (regex-replace-all (scanner-for-get-param cookie-name) url "\\1"))
-    (when value
-      (setq url (format nil "~A~:[?~;&~]~A=~A"
-                        url 
-                        (find #\? url)
-                        cookie-name
-                        (url-encode value))))
-    (when replace-ampersands-p
-      (setq url (regex-replace-all "&" url "&amp;")))
-    url))
-
-(defun maybe-rewrite-urls-for-session (html &key
-                                            (cookie-name (session-cookie-name *acceptor*))
-                                            (value (when-let (session (session *request*))
-                                                     (session-cookie-value session))))
-  "Rewrites the HTML page HTML such that the name/value pair
-COOKIE-NAME/COOKIE-VALUE is inserted if the client hasn't sent a
-cookie of the same name but only if *REWRITE-FOR-SESSION-URLS* is
-true.  See the docs for URL-REWRITE:REWRITE-URLS."
-  (cond ((or (not *rewrite-for-session-urls*)
-             (null value)
-             (cookie-in cookie-name))
-          html)
-        (t
-          (with-input-from-string (*standard-input* html)
-            (with-output-to-string (*standard-output*)
-              (url-rewrite:rewrite-urls
-               (lambda (url)
-                 (add-cookie-value-to-url url
-                                          :cookie-name cookie-name
-                                          :value value))))))))
 
 (defun create-prefix-dispatcher (prefix handler)
   "Creates a request dispatch function which will dispatch to the
@@ -249,20 +181,16 @@ it'll be the content type used for all files in the folder."
           (rfc-1123-date))
   (values))
 
-(defun redirect (target &key (host (host *request*) host-provided-p)
+(defun redirect (target &key (host (host *request*))
                              port
                              (protocol (if (ssl-p) :https :http))
-                             (add-session-id (not (or host-provided-p
-                                                      (starts-with-scheme-p target)
-                                                      (cookie-in (session-cookie-name *acceptor*)))))
                              (code +http-moved-temporarily+))
-  "Redirects the browser to TARGET which should be a string.  If
-TARGET is a full URL starting with a scheme, HOST, PORT and PROTOCOL
-are ignored.  Otherwise, TARGET should denote the path part of a URL,
+  "Redirects the browser to TARGET which should be a string. If TARGET
+is a full URL starting with a scheme, HOST, PORT and PROTOCOL are
+ignored. Otherwise, TARGET should denote the path part of a URL,
 PROTOCOL must be one of the keywords :HTTP or :HTTPS, and the URL to
 redirect to will be constructed from HOST, PORT, PROTOCOL, and TARGET.
-Adds a session ID if ADD-SESSION-ID is true.  If CODE is a 3xx
-redirection code, it will be sent as status code."
+If CODE is a 3xx redirection code, it will be sent as status code."
   (check-type code (integer 300 399))
   (let ((url (if (starts-with-scheme-p target)
                target
@@ -274,8 +202,6 @@ redirection code, it will be sent as status code."
                          (first (ppcre:split ":" (or host "")))
                          host)
                        port target))))
-    (when add-session-id
-      (setq url (add-cookie-value-to-url url :replace-ampersands-p nil)))
     (setf (header-out :location) url
           (return-code*) code)
     (abort-request-handler)))

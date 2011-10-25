@@ -1,5 +1,3 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Package: HUNCHENTOOT; Base: 10 -*-
-;;; $Header: /usr/local/cvsrep/hunchentoot/util.lisp,v 1.35 2008/04/08 14:39:18 edi Exp $
 
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz. All rights reserved.
 
@@ -103,7 +101,6 @@ according to HTTP/1.1 \(RFC 2068)."
                      ;; CHAR is not 'tspecial'
                      (not (find char "()<>@,;:\\\"/[]?={} " :test #'char=))))
               token)))
-
 
 (defun rfc-1123-date (&optional (time (get-universal-time)))
   "Generates a time string according to RFC 1123.  Default is current time."

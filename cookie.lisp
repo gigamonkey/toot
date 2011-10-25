@@ -1,5 +1,3 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Package: HUNCHENTOOT; Base: 10 -*-
-;;; $Header: /usr/local/cvsrep/hunchentoot/cookie.lisp,v 1.8 2008/02/13 16:02:17 edi Exp $
 
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz.  All rights reserved.
 
@@ -30,42 +28,13 @@
 (in-package :hunchentoot)
 
 (defclass cookie ()
-  ((name :initarg :name
-         :reader cookie-name
-         :type string
-         :documentation "The name of the cookie - a string.")
-   (value :initarg :value
-          :accessor cookie-value
-          :initform ""
-          :documentation "The value of the cookie. Will be URL-encoded
-when sent to the browser.")
-   (expires :initarg :expires
-            :initform nil
-            :accessor cookie-expires
-            :documentation "The time \(a universal time) when the
-cookie expires \(or NIL).")
-   (path :initarg :path
-         :initform nil
-         :accessor cookie-path
-         :documentation "The path this cookie is valid for \(or NIL).")
-   (domain :initarg :domain
-           :initform nil
-           :accessor cookie-domain
-           :documentation "The domain this cookie is valid for \(or NIL).")
-   (secure :initarg :secure
-           :initform nil
-           :accessor cookie-secure
-           :documentation "A generalized boolean denoting whether this
-cookie is a secure cookie.")
-   (http-only :initarg :http-only
-              :initform nil
-              :accessor cookie-http-only
-              :documentation "A generalized boolean denoting whether
-this cookie is a `HttpOnly' cookie.
-
-This is a Microsoft extension that has been implemented in Firefox as
-well. See <http://msdn2.microsoft.com/en-us/library/ms533046.aspx>."))
-  (:documentation "Each COOKIE objects describes one outgoing cookie."))
+  ((name :initarg :name :reader cookie-name :type string)
+   (value :initarg :value :accessor cookie-value :initform "")
+   (expires :initarg :expires :initform nil :accessor cookie-expires)
+   (path :initarg :path :initform nil :accessor cookie-path)
+   (domain :initarg :domain :initform nil :accessor cookie-domain)
+   (secure :initarg :secure :initform nil :accessor cookie-secure)
+   (http-only :initarg :http-only :initform nil :accessor cookie-http-only)))
 
 (defmethod initialize-instance :around ((cookie cookie) &rest init-args)
   "Ensure COOKIE has a correct slot-value for NAME."
@@ -75,9 +44,6 @@ well. See <http://msdn2.microsoft.com/en-us/library/ms533046.aspx>."))
   (call-next-method))
 
 (defun set-cookie* (cookie &optional (reply *reply*))
-  "Adds the COOKIE object COOKIE to the outgoing cookies of the
-REPLY object REPLY. If a cookie with the same name
-\(case-sensitive) already exists, it is replaced."
   (let* ((name (cookie-name cookie))
          (place (assoc name (cookies-out reply) :test #'string=)))
     (cond
@@ -88,28 +54,20 @@ REPLY object REPLY. If a cookie with the same name
         cookie))))
 
 (defun set-cookie (name &key (value "") expires path domain secure http-only (reply *reply*))
-  "Creates a cookie object from the parameters provided and adds
-it to the outgoing cookies of the REPLY object REPLY. If a cookie
-with the name NAME \(case-sensitive) already exists, it is
-replaced."
   (set-cookie* (make-instance 'cookie
-                              :name name
-                              :value value
-                              :expires expires
-                              :path path
-                              :domain domain
-                              :secure secure
-                              :http-only http-only)
+                 :name name
+                 :value value
+                 :expires expires
+                 :path path
+                 :domain domain
+                 :secure secure
+                 :http-only http-only)
                reply))
 
 (defun cookie-date (universal-time)
-  "Converts UNIVERSAL-TIME to cookie date format."
-  (and universal-time
-       (rfc-1123-date universal-time)))
+  (and universal-time (rfc-1123-date universal-time)))
 
 (defmethod stringify-cookie ((cookie cookie))
-  "Converts the COOKIE object COOKIE to a string suitable for a
-'Set-Cookie' header to be sent to the client."
   (format nil
           "~A=~A~:[~;~:*; expires=~A~]~:[~;~:*; path=~A~]~:[~;~:*; domain=~A~]~:[~;; secure~]~:[~;; HttpOnly~]"
           (cookie-name cookie)

@@ -1,5 +1,3 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Package: HUNCHENTOOT; Base: 10 -*-
-;;; $Header: /usr/local/cvsrep/hunchentoot/reply.lisp,v 1.20 2008/02/13 16:02:18 edi Exp $
 
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz.  All rights reserved.
 
@@ -30,42 +28,12 @@
 (in-package :hunchentoot)
 
 (defclass reply ()
-  ((content-type :reader content-type
-                 :documentation "The outgoing 'Content-Type' http
-header which defaults to the value of *DEFAULT-CONTENT-TYPE*.")
-   (content-length :reader content-length
-                   :initform nil
-                   :documentation "The outgoing 'Content-Length'
-http header which defaults NIL.  If this is NIL, Hunchentoot will
-compute the content length.")
-   (headers-out :initform nil
-                :reader headers-out
-                :documentation "An alist of the outgoing http headers
-not including the 'Set-Cookie', 'Content-Length', and 'Content-Type'
-headers.  Use the functions HEADER-OUT and \(SETF HEADER-OUT) to
-modify this slot.")
-   (return-code :initform +http-ok+
-                :accessor return-code
-                :documentation "The http return code of this
-reply.  The return codes Hunchentoot can handle are defined in
-specials.lisp.")
-   (external-format :initform *hunchentoot-default-external-format*
-                    :accessor reply-external-format
-                    :documentation "The external format of the reply -
-used for character output.")
-   (cookies-out :initform nil
-                :accessor cookies-out
-                :documentation "The outgoing cookies.  This slot's
-value should only be modified by the functions defined in
-cookies.lisp."))
-  (:documentation "Objects of this class hold all the information
-about an outgoing reply.  They are created automatically by
-Hunchentoot and can be accessed and modified by the corresponding
-handler.
-
-You should not mess with the slots of these objects directly, but you
-can subclass REPLY in order to implement your own behaviour.  See the
-REPLY-CLASS slot of the ACCEPTOR class."))
+  ((content-type :reader content-type)
+   (content-length :reader content-length :initform nil)
+   (headers-out :initform nil :reader headers-out)
+   (return-code :initform +http-ok+ :accessor return-code)
+   (external-format :initform *hunchentoot-default-external-format* :accessor reply-external-format)
+   (cookies-out :initform nil :accessor cookies-out)))
 
 (defmethod initialize-instance :after ((reply reply) &key)
   (setf (header-out :content-type reply) *default-content-type*))

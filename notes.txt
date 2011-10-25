@@ -1,0 +1,47 @@
+-*- mode: markup; -*-
+
+* Parts
+
+Acceptors. Manage a server socket and accept connections from clients.
+Each acceptor has a taskmaster which is responsible for calling
+accept-connections and process-connection for each connection.
+
+Taskmasters actually run the acceptors, either everything in one
+thread (a single-threaded-taskmaster) or in a dedicated thread for
+accept-connection and a new thread for each process-connection.
+
+misc.lisp contains the low level “framework” above the lowest level
+HTTP server—create-prefix-dispatcher, etc.
+
+* Gross stripping
+
+Senselessly removing all :documentation just to have less to look at.
+
+* Reorganization ideas
+
+Acceptor should not know about SSL—or maybe it should and we should
+get rid of SSL acceptor; the acceptor can be parameterized with
+something that changes the default port and which replaces the stream.
+
+Acceptor should not have a document root.
+
+My send-headers-and-wrap stream should be built in—there should be an
+easy way for a response generator to specify that it wants a bivalent
+stream. Or maybe setting an external format on the reply should cause
+it to happen.
+
+Mime type data should be moved out of code.
+
+Perhaps the reply and request objects should be passed in to handler
+functions rather than as special variables.
+
+* To do
+
+Get rid of foo* functions. (Will presumably happen if *reply* and *request* are passed explicitly.
+
+Where is the proper place for session handling? Get rid of sessions
+machinery?
+
+* Threading
+
+create-request-handler-thread assumes that we will create 

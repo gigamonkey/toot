@@ -1,5 +1,3 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Package: CL-USER; Base: 10 -*-
-;;; $Header: /usr/local/cvsrep/hunchentoot/packages.lisp,v 1.34 2008/02/13 16:02:18 edi Exp $
 
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz. All rights reserved.
 
@@ -30,22 +28,14 @@
 (in-package :cl-user)
 
 (defpackage #:hunchentoot
-  (:nicknames #:tbnl)
   (:use :cl :cl-ppcre :chunga :flexi-streams :url-rewrite)
   (:shadow #:defconstant
            #:url-encode)
   ;; see asdf system definition
   (:import-from :hunchentoot-asd :*hunchentoot-version*)
-  #+:lispworks
-  (:import-from :lw #:with-unique-names #:when-let)
   (:export #:*acceptor*
            #:*approved-return-codes*
            #:*catch-errors-p*
-           #+:lispworks
-           #:*cleanup-function*
-           #+:lispworks
-           #:*cleanup-interval*
-           #:*content-types-for-url-rewrite*
            #:*default-connection-timeout*
            #:*default-content-type*
            #:*default-handler*
@@ -63,17 +53,9 @@
            #:*methods-for-post-parameters*
            #:*reply*
            #:*request*
-           #:*rewrite-for-session-urls*
-           #:*session*
-           #:*session-gc-frequency*
-           #:*session-max-time*
-           #:*session-removal-hook*
-           #:*session-secret*
            #:*show-lisp-backtraces-p*
            #:*show-lisp-errors-p*
            #:*tmp-directory*
-           #:*use-remote-addr-for-sessions*
-           #:*use-user-agent-for-sessions*
            #:+http-accepted+
            #:+http-authorization-required+
            #:+http-bad-gateway+
@@ -166,7 +148,6 @@
            #:default-document-directory
            #:define-easy-handler
            #:delete-aux-request-value
-           #:delete-session-value
            #:dispatch-easy-handlers
            #:easy-acceptor
            #:escape-for-html
@@ -194,9 +175,8 @@
            #:log-message*
            #:maybe-invoke-debugger
            #:mime-type
-           #:next-session-id
+           #-:hunchentoot-no-ssl #:ssl-acceptor
            #:no-cache
-           #:one-thread-per-connection-taskmaster
            #:parameter
            #:parameter-error
            #:post-parameter
@@ -216,7 +196,6 @@
            #:remote-addr*
            #:remote-port
            #:remote-port*
-           #:remove-session
            #:reply
            #:reply-external-format
            #:reply-external-format*
@@ -228,8 +207,6 @@
            #:request-uri*
            #:require-authorization
            #:reset-connection-stream
-           #:reset-sessions
-           #:reset-session-secret
            #:return-code
            #:return-code*
            #:rfc-1123-date
@@ -238,33 +215,17 @@
            #:send-headers
            #:server-protocol
            #:server-protocol*
-           #:session
-           #:session-cookie-name
-           #:session-cookie-value
-           #:session-created
-           #:session-db
-           #:session-db-lock
-           #:session-gc
-           #:session-id
-           #:session-max-time
-           #:session-remote-addr
-           #:session-start
-           #:session-too-old-p
-           #:session-user-agent
-           #:session-value
-           #:session-verify
            #:set-cookie
            #:set-cookie*
            #:shutdown
            #:single-threaded-taskmaster
-           #-:hunchentoot-no-ssl #:ssl-acceptor
            #:ssl-p
            #:start
            #:start-listening
-           #:start-session
            #:stop
            #:taskmaster
            #:taskmaster-acceptor
+           #:thread-per-connection-taskmaster
            #:url-decode
            #:url-encode
            #:user-agent

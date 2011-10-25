@@ -1,5 +1,3 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Package: CL-USER; Base: 10 -*-
-;;; $Header: /usr/local/cvsrep/hunchentoot/hunchentoot.asd,v 1.61 2008/04/09 08:17:48 edi Exp $
 
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz.  All rights reserved.
 
@@ -48,12 +46,12 @@ for diagnostic output.")
                :cl-fad
                :cl-ppcre
                :flexi-streams
-               #-(or :lispworks :hunchentoot-no-ssl) :cl+ssl
+               #-:hunchentoot-no-ssl :cl+ssl
                :md5
                :rfc2388
                :trivial-backtrace
-               #-:lispworks :usocket
-               #-:lispworks :bordeaux-threads)
+               :usocket
+               :bordeaux-threads)
   :components ((:module url-rewrite
                 :serial t
                 :components ((:file "packages")
@@ -62,8 +60,7 @@ for diagnostic output.")
                              (:file "util")
                              (:file "url-rewrite")))
                (:file "packages")
-               #+:lispworks (:file "lispworks")
-               #-:lispworks (:file "compat")
+               (:file "compat")
                (:file "specials")
                (:file "conditions")
                (:file "mime-types")
@@ -72,9 +69,7 @@ for diagnostic output.")
                (:file "cookie")
                (:file "reply")
                (:file "request")
-               (:file "session")
                (:file "misc")
-               (:file "easy-handlers")
                (:file "headers")
                (:file "set-timeouts")
                (:file "taskmaster")

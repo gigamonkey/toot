@@ -1,5 +1,3 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Package: CL-USER; Base: 10 -*-
-;;; $Header: /usr/local/cvsrep/hunchentoot/server.lisp,v 1.43 2008/04/09 08:17:48 edi Exp $
 
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz.  All rights reserved.
 
@@ -52,12 +50,10 @@ set."
     (socket:socket-options (usocket:socket usocket) :SO-SNDTIMEO write-timeout))
   #+:openmcl
   (when read-timeout
-    (setf (ccl:stream-input-timeout (usocket:socket usocket))
-          read-timeout))
+    (setf (ccl:stream-input-timeout (usocket:socket usocket)) read-timeout))
   #+:openmcl
   (when write-timeout
-    (setf (ccl:stream-output-timeout (usocket:socket usocket))
-          write-timeout))
+    (setf (ccl:stream-output-timeout (usocket:socket usocket)) write-timeout))
   #+:sbcl
   (when read-timeout
     (setf (sb-impl::fd-stream-timeout (usocket:socket-stream usocket))

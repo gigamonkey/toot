@@ -1,5 +1,3 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Package: HUNCHENTOOT; Base: 10 -*-
-;;; $Header: /usr/local/cvsrep/hunchentoot/headers.lisp,v 1.29 2008/03/27 08:08:31 edi Exp $
 
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz.  All rights reserved.
 
@@ -29,10 +27,8 @@
 
 (in-package :hunchentoot)
 
-(defgeneric write-header-line (key value stream)
-  (:documentation "Accepts a string KEY and a Lisp object VALUE and
-writes them directly to the client as an HTTP header line.")
-  (:method (key (string string) stream)
+(defun write-header-line (key value stream)
+  (let ((string (princ-to-string value)))
     (write-string key stream)
     (write-char #\: stream)
     (write-char #\Space stream)
@@ -49,40 +45,23 @@ writes them directly to the client as an HTTP header line.")
              (write-char #\Linefeed stream))
            (setf start (1+ end))
            (when (<= (length string) start)
-             (return))))))
-  (:method (key value stream)
-    (write-header-line key (princ-to-string value) stream)))
+             (return)))))))
 
 (defun maybe-add-charset-to-content-type-header (content-type external-format)
-  "Given the contents of a CONTENT-TYPE header, add a charset=
-  attribute describing the given EXTERNAL-FORMAT if no charset=
-  attribute is already present and the content type is a text content
-  type.  Returns the augmented content type."
   (if (and (cl-ppcre:scan "(?i)^text" content-type)
            (not (cl-ppcre:scan "(?i);\\s*charset=" content-type)))
       (format nil "~A; charset=~(~A~)" content-type (flex:external-format-name external-format))
       content-type))
 
 (defun start-output (return-code &optional (content nil content-provided-p))
-  "Sends all headers and maybe the content body to
-*HUNCHENTOOT-STREAM*.  Returns immediately and does nothing if called
-more than once per request.  Called by PROCESS-REQUEST and/or
-SEND-HEADERS.  The RETURN-CODE argument represents the integer return
-code of the request.  The corresponding reason phrase is determined by
-calling the REASON-PHRASE function.  The CONTENT provided represents
-the body data to send to the client, if any.  If it is not specified,
-no body is written to the client.  The handler function is expected to
-directly write to the stream in this case.
-
-Returns the stream that is connected to the client."
   (let* ((chunkedp (and (acceptor-output-chunking-p *acceptor*)
                         (eq (server-protocol *request*) :http/1.1)
                         ;; only turn chunking on if the content
                         ;; length is unknown at this point...
                         (null (or (content-length*) content-provided-p))))
          (request-method (request-method *request*))
-         (head-request-p (eq request-method :head))
-         content-modified-p)
+         (head-request-p (eq request-method :head)))
+
     (multiple-value-bind (keep-alive-p keep-alive-requested-p)
         (keep-alive-p *request*)
       (when keep-alive-p
@@ -115,14 +94,7 @@ Returns the stream that is connected to the client."
       (setf (header-out :server) (or (header-out :server)
                                      (acceptor-server-name *acceptor*))))
     (setf (header-out :date) (rfc-1123-date))
-    (when (and (stringp content)
-               (not content-modified-p)
-               (starts-with-one-of-p (or (content-type*) "")
-                                     *content-types-for-url-rewrite*))
-      ;; if the Content-Type header starts with one of the strings
-      ;; in *CONTENT-TYPES-FOR-URL-REWRITE* then maybe rewrite the
-      ;; content
-      (setq content (maybe-rewrite-urls-for-session content)))
+
     (when (stringp content)
       ;; if the content is a string, convert it to the proper external format
       (setf content (string-to-octets content :external-format (reply-external-format*))
@@ -154,17 +126,7 @@ Returns the stream that is connected to the client."
       (setf (chunked-stream-output-chunking-p *hunchentoot-stream*) t))
     *hunchentoot-stream*))
 
-(defun send-response (acceptor stream status-code
-                      &key headers cookies content)
-  "Send a HTTP response to the STREAM and log the event in ACCEPTOR.
-  STATUS-CODE is the HTTP status code used in the response.  HEADERS
-  and COOKIES are used to create the response header.  If CONTENT is
-  provided, it is sent as the response body.
-
-  If *HEADER-STREAM* is not NIL, the response headers are written to
-  that stream when they are written to the client.
-
-  STREAM is returned."
+(defun send-response (acceptor stream status-code &key headers cookies content)
   (when content
     (setf (content-length*) (length content)))
   (when (content-length*)
@@ -196,36 +158,16 @@ Returns the stream that is connected to the client."
   stream)
 
 (defun send-headers ()
-  "Sends the initial status line and all headers as determined by the
-REPLY object *REPLY*.  Returns a binary stream to which the body of
-the reply can be written.  Once this function has been called, further
-changes to *REPLY* don't have any effect.  Also, automatic handling of
-errors \(i.e. sending the corresponding status code to the browser,
-etc.) is turned off for this request.  If your handlers return the
-full body as a string or as an array of octets you should NOT call
-this function.
-
-This function does not return control to the caller during HEAD
-request processing."
   (start-output (return-code*)))
 
 (defun read-initial-request-line (stream)
-  "Reads and returns the initial HTTP request line, catching permitted
-errors and handling *BREAK-EVEN-WHILE-READING-REQUEST-TYPE-P*.  If no
-request could be read, returns NIL.  At this point, both an
-end-of-file as well as a timeout condition are normal; end-of-file
-will occur when the client has decided to not send another request but
-to close the connection instead, a timeout indicates that the
-connection timeout established by Hunchentoot has expired and we do
-not want to wait for another request any longer."
   (handler-case
       (let ((*current-error-message* "While reading initial request line:"))
         (with-mapped-conditions ()
           (read-line* stream)))
-    ((or end-of-file #-:lispworks usocket:timeout-error) ())))
+    ((or end-of-file usocket:timeout-error) ())))
 
 (defun send-bad-request-response (stream &optional additional-info)
-  "Send a ``Bad Request'' response to the client."
   (write-sequence (flex:string-to-octets
                    (format nil "HTTP/1.0 ~D ~A~C~CConnection: close~C~C~C~CYour request could not be interpreted by this HTTP server~C~C~@[~A~]~C~C"
                            +http-bad-request+ (reason-phrase +http-bad-request+) #\Return #\Linefeed

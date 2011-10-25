@@ -1,5 +1,3 @@
-;;; -*- Mode: LISP; Syntax: COMMON-LISP; Package: HUNCHENTOOT; Base: 10 -*-
-;;; $Header: /usr/local/cvsrep/hunchentoot/specials.lisp,v 1.33 2008/04/08 14:39:18 edi Exp $
 
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz. All rights reserved.
 
@@ -114,24 +112,8 @@ for cookie date format.")
   "The three-character names of the twelve months - needed for cookie
 date format.")
 
-(defvar *rewrite-for-session-urls* t
-  "Whether HTML pages should possibly be rewritten for cookie-less
-session-management.")
-
-(defvar *content-types-for-url-rewrite*
-  '("text/html" "application/xhtml+xml")
-  "The content types for which url-rewriting is OK. See
-*REWRITE-FOR-SESSION-URLS*.")
-
 (defvar *the-random-state* (make-random-state t)
   "A fresh random state.")
-
-(defvar-unbound *session-secret*
-  "A random ASCII string that's used to encode the public session
-data.  This variable is initially unbound and will be set \(using
-RESET-SESSION-SECRET) the first time a session is created, if
-necessary.  You can prevent this from happening if you set the value
-yourself before starting acceptors.")
 
 (defvar-unbound *hunchentoot-stream*
   "The stream representing the socket Hunchentoot is listening on.")
@@ -150,30 +132,6 @@ be called with a pathname for each file which is uploaded to
 Hunchentoot.  The pathname denotes the temporary file to which
 the uploaded file is written.  The hook is called directly before
 the file is created.")
-
-(defvar *session-db* nil
-  "The default \(global) session database.")
-
-(defvar *session-max-time* #.(* 30 60)
-  "The default time \(in seconds) after which a session times out.")
-
-(defvar *session-gc-frequency* 50
-  "A session GC \(see function SESSION-GC) will happen every
-*SESSION-GC-FREQUENCY* requests \(counting only requests which create
-a new session) if this variable is not NIL.  See SESSION-CREATED.")
-
-(defvar *use-user-agent-for-sessions* t
-  "Whether the 'User-Agent' header should be encoded into the session
-string.  If this value is true, a session will cease to be accessible
-if the client sends a different 'User-Agent' header.")
-
-(defvar *use-remote-addr-for-sessions* nil
-  "Whether the client's remote IP \(as returned by REAL-REMOTE-ADDR)
-should be encoded into the session string.  If this value is true, a
-session will cease to be accessible if the client's remote IP changes.
-
-This might for example be an issue if the client uses a proxy server
-which doesn't send correct 'X_FORWARDED_FOR' headers.")
 
 (defvar *default-content-type* "text/html"
   "The default content-type header which is returned to the client.
@@ -235,9 +193,6 @@ the debugger).")
 (defvar-unbound *reply*
   "The current REPLY object while in the context of a request.")
 
-(defvar-unbound *session*
-  "The current session while in the context of a request, or NIL.")
-
 (defconstant +implementation-link+
   #+:cmu "http://www.cons.org/cmucl/"
   #+:sbcl "http://www.sbcl.org/"
@@ -275,16 +230,13 @@ encode cookie values.")
 from and writing to a socket stream.")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
- (define-symbol-macro *supports-threads-p*
-   #+:lispworks t
-   #-:lispworks bt:*supports-threads-p*))
+  (define-symbol-macro *supports-threads-p* bt:*supports-threads-p*))
 
 (defvar *global-session-db-lock*
   (load-time-value (and *supports-threads-p* (make-lock "global-session-db-lock")))
   "A global lock to prevent two threads from modifying *session-db* at
 the same time \(or NIL for Lisps which don't have threads).")
 
-#-:lispworks
 (defconstant +new-connection-wait-time+ 2
   "Time in seconds to wait for a new connection to arrive before
 performing a cleanup run.")
