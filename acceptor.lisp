@@ -128,15 +128,15 @@
          (chunked-stream-stream stream))
         (t stream)))
 
-(defun do-with-acceptor-request-count-incremented (*acceptor* function)
-  (with-lock-held ((acceptor-shutdown-lock *acceptor*))
-    (incf (accessor-requests-in-progress *acceptor*)))
+(defun do-with-acceptor-request-count-incremented (acceptor function)
+  (with-lock-held ((acceptor-shutdown-lock acceptor))
+    (incf (accessor-requests-in-progress acceptor)))
   (unwind-protect
        (funcall function)
-    (with-lock-held ((acceptor-shutdown-lock *acceptor*))
-      (decf (accessor-requests-in-progress *acceptor*))
-      (when (acceptor-shutdown-p *acceptor*)
-        (condition-variable-signal (acceptor-shutdown-queue *acceptor*))))))
+    (with-lock-held ((acceptor-shutdown-lock acceptor))
+      (decf (accessor-requests-in-progress acceptor))
+      (when (acceptor-shutdown-p acceptor)
+        (condition-variable-signal (acceptor-shutdown-queue acceptor))))))
 
 (defmacro with-acceptor-request-count-incremented ((acceptor) &body body)
   "Execute BODY with ACCEPTOR-REQUESTS-IN-PROGRESS of ACCEPTOR
@@ -146,27 +146,25 @@
   processing."
   `(do-with-acceptor-request-count-incremented ,acceptor (lambda () ,@body)))
 
-(defun process-connection (*acceptor* socket)
+(defun process-connection (acceptor socket)
   (handler-bind ((error
                   ;; abort if there's an error which isn't caught inside
                   (lambda (cond)
-                    (log-message* *lisp-errors-log-level* "Error while processing connection: ~A" cond)
+                    (acceptor-log-message acceptor *lisp-errors-log-level* "Error while processing connection: ~A" cond)
                     (return-from process-connection)))
                  (warning
                   ;; log all warnings which aren't caught inside
                   (lambda (cond)
-                    (log-message* *lisp-warnings-log-level* "Warning while processing connection: ~A" cond))))
+                    (acceptor-log-message acceptor *lisp-warnings-log-level* "Warning while processing connection: ~A" cond))))
     (with-mapped-conditions ()
-      (let ((*hunchentoot-stream* (make-socket-stream socket *acceptor*)))
-        (when (ssl-adapter *acceptor*)
-          (setf *hunchentoot-stream* (setup-ssl-stream (ssl-adapter *acceptor*) *hunchentoot-stream*)))
+      (let ((*hunchentoot-stream* (make-socket-stream socket acceptor)))
         (unwind-protect
              ;; process requests until either the acceptor is shut down,
              ;; *CLOSE-HUNCHENTOOT-STREAM* has been set to T by the
              ;; handler, or the peer fails to send a request
              (loop
                 (let ((*close-hunchentoot-stream* t))
-                  (when (acceptor-shutdown-p *acceptor*)
+                  (when (acceptor-shutdown-p acceptor)
                     (return))
                   (multiple-value-bind (headers-in method url-string protocol)
                       (get-request-data *hunchentoot-stream*)
@@ -174,33 +172,38 @@
                     (unless method
                       (return))
                     ;; bind per-request special variables, then process the
-                    ;; request - note that *ACCEPTOR* was bound above already
-                    (let ((*reply* (make-instance 'reply))
+                    ;; request
+                    (let ((reply (make-instance 'reply :acceptor acceptor))
                           (transfer-encodings (cdr (assoc* :transfer-encoding headers-in))))
+
                       (when transfer-encodings
                         (setq transfer-encodings
                               (split "\\s*,\\s*" transfer-encodings))
+
                         (when (member "chunked" transfer-encodings :test #'equalp)
-                          (cond ((acceptor-input-chunking-p *acceptor*)
+                          (cond ((acceptor-input-chunking-p acceptor)
                                  ;; turn chunking on before we read the request body
                                  (setf *hunchentoot-stream* (make-chunked-stream *hunchentoot-stream*)
                                        (chunked-stream-input-chunking-p *hunchentoot-stream*) t))
                                 (t (hunchentoot-error "Client tried to use ~
 chunked encoding, but acceptor is configured to not use it.")))))
+
                       (multiple-value-bind (remote-addr remote-port)
                           (get-peer-address-and-port socket)
-                        (with-acceptor-request-count-incremented (*acceptor*)
+                        (with-acceptor-request-count-incremented (acceptor)
                           (process-request (make-instance 'request
-                                             :acceptor *acceptor*
+                                             :acceptor acceptor
+                                             :reply reply
                                              :remote-addr remote-addr
                                              :remote-port remote-port
                                              :headers-in headers-in
                                              :content-stream *hunchentoot-stream*
                                              :method method
                                              :uri url-string
-                                             :server-protocol protocol)))))
+                                             :server-protocol protocol)
+                                           reply))))
                     (force-output *hunchentoot-stream*)
-                    (setq *hunchentoot-stream* (reset-connection-stream *acceptor* *hunchentoot-stream*))
+                    (setq *hunchentoot-stream* (reset-connection-stream acceptor *hunchentoot-stream*))
                     (when *close-hunchentoot-stream*
                       (return)))))
           (when *hunchentoot-stream*
@@ -212,32 +215,30 @@ chunked encoding, but acceptor is configured to not use it.")))))
             (ignore-errors*
               (close *hunchentoot-stream* :abort t))))))))
 
-(defun acceptor-log-access (acceptor &key return-code)
-
-  (with-log-stream (stream (acceptor-access-log-destination acceptor) *access-log-lock*)
-    (format stream "~:[-~@[ (~A)~]~;~:*~A~@[ (~A)~]~] ~:[-~;~:*~A~] [~A] \"~A ~A~@[?~A~] ~
+(defun acceptor-log-access (request &key return-code)
+  (let ((acceptor (acceptor request))
+        (reply (reply request)))
+    (with-log-stream (stream (acceptor-access-log-destination acceptor) *access-log-lock*)
+      (format stream "~:[-~@[ (~A)~]~;~:*~A~@[ (~A)~]~] ~:[-~;~:*~A~] [~A] \"~A ~A~@[?~A~] ~
                     ~A\" ~D ~:[-~;~:*~D~] \"~:[-~;~:*~A~]\" \"~:[-~;~:*~A~]\"~%"
-            (remote-addr*)
-            (header-in* :x-forwarded-for)
-            (authorization)
-            (iso-time)
-            (request-method*)
-            (script-name*)
-            (query-string*)
-            (server-protocol*)
-            return-code
-            (content-length*)
-            (referer)
-            (user-agent))))
+              (remote-addr request)
+              (header-in :x-forwarded-for request)
+              (authorization request)
+              (iso-time)
+              (request-method request)
+              (script-name request)
+              (query-string request)
+              (server-protocol request)
+              return-code
+              (content-length reply)
+              (referer request)
+              (user-agent request)))))
 
 (defun acceptor-log-message (acceptor log-level format-string &rest format-arguments)
   (with-log-stream (stream (acceptor-message-log-destination acceptor) *message-log-lock*)
     (format stream "[~A~@[ [~A]~]] ~?~%"
             (iso-time) log-level
             format-string format-arguments)))
-
-(defun log-message* (log-level format-string &rest format-arguments)
-  (apply 'acceptor-log-message *acceptor* log-level format-string format-arguments))
 
 ;; usocket implementation
 
@@ -270,39 +271,34 @@ chunked encoding, but acceptor is configured to not use it.")))))
                                      client-connection))))))
 
 
-(defmethod acceptor-dispatch-request ((acceptor acceptor) request)
-  (declare (ignore request))
-  (if (acceptor-document-root acceptor)
-      (handle-static-file (merge-pathnames (if (equal (script-name*) "/")
-                                               "index.html"
-                                               (subseq (script-name*) 1))
-                                           (acceptor-document-root acceptor)))
-      (setf (return-code *reply*) +http-not-found+)))
+(defun acceptor-dispatch-request (acceptor request reply)
+  (cond
+    ((acceptor-document-root acceptor)
+     (handle-static-file request reply 
+                         (merge-pathnames (if (equal (script-name request) "/")
+                                              "index.html"
+                                              (subseq (script-name request) 1))
+                                          (acceptor-document-root acceptor))))
+    (t (setf (return-code reply) +http-not-found+))))
 
-(defun handle-request (*acceptor* *request*)
-  "Standard method for request handling.  Calls the request dispatcher
-of *ACCEPTOR* to determine how the request should be handled.  Also
-sets up standard error handling which catches any errors within the
-handler."
-  (handler-bind ((error
-                  (lambda (cond)
-                    ;; if the headers were already sent, the error
-                    ;; happened within the body and we have to close
-                    ;; the stream
-                    (when *headers-sent*
-                      (setq *close-hunchentoot-stream* t))
-                    (throw 'handler-done
-                      (values nil cond (get-backtrace)))))
-                 (warning
-                  (lambda (cond)
-                    (when *log-lisp-warnings-p*
-                      (log-message* *lisp-warnings-log-level* "~A" cond)))))
+(defun handle-request (acceptor request reply)
+  (handler-bind 
+      ((error
+        (lambda (cond)
+          ;; if the headers were already sent, the error
+          ;; happened within the body and we have to close
+          ;; the stream
+          (when *headers-sent* (setq *close-hunchentoot-stream* t))
+          (throw 'handler-done (values nil cond (get-backtrace)))))
+       (warning
+        (lambda (cond)
+          (when *log-lisp-warnings-p*
+            (acceptor-log-message acceptor *lisp-warnings-log-level* "~A" cond)))))
     (with-debugger
-      (acceptor-dispatch-request *acceptor* *request*))))
+      (acceptor-dispatch-request acceptor request reply))))
 
-(defgeneric acceptor-status-message (acceptor http-status-code &key &allow-other-keys)
-  (:documentation
-   "This function is called after the request's handler has been
+(defun acceptor-status-message (request http-status-code &rest properties &key &allow-other-keys)
+  "This function is called after the request's handler has been
    invoked to convert the HTTP-STATUS-CODE to a HTML message to be
    displayed to the user.  If this function returns a string, that
    string is sent to the client instead of the content produced by the
@@ -322,11 +318,50 @@ handler."
    In addition to the variables corresponding to keyword arguments,
    the script-name, lisp-implementation-type,
    lisp-implementation-version and hunchentoot-version variables are
-   available."))
+   available."
+  (let ((acceptor (acceptor request))
+        (reply (reply request)))
+    (handler-case
+        (labels
+            ((substitute-request-context-variables (string)
+               (let ((properties (append `(:script-name ,(script-name request)
+                                                        :lisp-implementation-type ,(lisp-implementation-type)
+                                                        :lisp-implementation-version ,(lisp-implementation-version)
+                                                        :hunchentoot-version ,*hunchentoot-version*)
+                                         properties)))
+                 (cl-ppcre:regex-replace-all "(?i)\\$\\{([a-z0-9-_]+)\\}"
+                                             string
+                                             (lambda (target-string start end match-start match-end reg-starts reg-ends)
+                                               (declare (ignore start end match-start match-end))
+                                               (let ((variable-name (string-as-keyword (subseq target-string
+                                                                                               (aref reg-starts 0)
+                                                                                               (aref reg-ends 0)))))
+                                                 (escape-for-html (princ-to-string (getf properties variable-name variable-name))))))))
+             (file-contents (file)
+               (let ((buf (make-string (file-length file))))
+                 (read-sequence buf file)
+                 buf))
+             (error-contents-from-template ()
+               (let ((error-file-template-pathname (and (acceptor-error-template-directory acceptor)
+                                                        (probe-file (make-pathname :name (princ-to-string http-status-code)
+                                                                                   :type "html"
+                                                                                   :defaults (acceptor-error-template-directory acceptor))))))
+                 (when error-file-template-pathname
+                   (with-open-file (file error-file-template-pathname :if-does-not-exist nil :element-type 'character)
+                     (when file
+                       (setf (content-type reply) "text/html")
+                       (substitute-request-context-variables (file-contents file))))))))
+          (or (unless (< 300 http-status-code)
+                (apply 'make-cooked-message request reply http-status-code properties)) ; don't ever try template for positive return codes
+              (error-contents-from-template) ; try template
+              (apply 'make-cooked-message request reply http-status-code properties))) ; fall back to cooked message
+      (error (e)
+        (acceptor-log-message acceptor :error "error ~A during error processing, sending cooked message to client" e)
+        (apply 'make-cooked-message request reply http-status-code properties)))))
 
-(defun make-cooked-message (http-status-code &key error backtrace)
+(defun make-cooked-message (request reply http-status-code &key error backtrace)
   (labels ((cooked-message (format &rest arguments)
-             (setf (content-type*) "text/html; charset=iso-8859-1")
+             (setf (content-type reply) "text/html; charset=iso-8859-1")
              (format nil "<html><head><title>~D ~A</title></head><body><h1>~:*~A</h1>~?<p><hr>~A</p></body></html>"
                      http-status-code (reason-phrase http-status-code)
                      format (mapcar (lambda (arg)
@@ -334,21 +369,21 @@ handler."
                                           (escape-for-html arg)
                                           arg))
                                     arguments)
-                     (address-string))))
+                     (address-string request))))
     (case http-status-code
       ((#.+http-moved-temporarily+
         #.+http-moved-permanently+)
-       (cooked-message "The document has moved <a href='~A'>here</a>" (header-out :location)))
+       (cooked-message "The document has moved <a href='~A'>here</a>" (header-out :location reply)))
       ((#.+http-authorization-required+)
        (cooked-message "The server could not verify that you are authorized to access the document requested.  ~
                         Either you supplied the wrong credentials \(e.g., bad password), or your browser doesn't ~
                         understand how to supply the credentials required."))
       ((#.+http-forbidden+)
        (cooked-message "You don't have permission to access ~A on this server."
-                       (script-name *request*)))
+                       (script-name request)))
       ((#.+http-not-found+)
        (cooked-message "The requested URL ~A was not found on this server."
-                       (script-name *request*)))
+                       (script-name request)))
       ((#.+http-bad-request+)
        (cooked-message "Your browser sent a request that this server could not understand."))
       ((#.+http-internal-server-error+)
@@ -357,59 +392,7 @@ handler."
                            (escape-for-html (princ-to-string error))
                            (when *show-lisp-backtraces-p*
                              (escape-for-html (princ-to-string backtrace))))
-           (cooked-message "An error has occured"))))))
-
-(defmethod acceptor-status-message ((acceptor t) http-status-code &rest args &key &allow-other-keys)
-  (apply 'make-cooked-message http-status-code args))
-
-(defmethod acceptor-status-message :around ((acceptor acceptor) http-status-code &rest args &key &allow-other-keys)
-  (handler-case
-      (call-next-method)
-    (error (e)
-      (log-message* :error "error ~A during error processing, sending cooked message to client" e)
-      (apply 'make-cooked-message http-status-code args))))
-
-(defun string-as-keyword (string)
-  "Intern STRING as keyword using the reader so that case conversion is done with the reader defaults."
-  (let ((*package* (find-package :keyword)))
-    (read-from-string string)))
-
-(defmethod acceptor-status-message ((acceptor acceptor) http-status-code &rest properties &key &allow-other-keys)
-  "Default function to generate error message sent to the client."
-  (labels
-      ((substitute-request-context-variables (string)
-         (let ((properties (append `(:script-name ,(script-name*)
-                                     :lisp-implementation-type ,(lisp-implementation-type)
-                                     :lisp-implementation-version ,(lisp-implementation-version)
-                                     :hunchentoot-version ,*hunchentoot-version*)
-                                   properties)))
-           (cl-ppcre:regex-replace-all "(?i)\\$\\{([a-z0-9-_]+)\\}"
-                                       string
-                                       (lambda (target-string start end match-start match-end reg-starts reg-ends)
-                                         (declare (ignore start end match-start match-end))
-                                         (let ((variable-name (string-as-keyword (subseq target-string
-                                                                                         (aref reg-starts 0)
-                                                                                         (aref reg-ends 0)))))
-                                           (escape-for-html (princ-to-string (getf properties variable-name variable-name))))))))
-       (file-contents (file)
-         (let ((buf (make-string (file-length file))))
-           (read-sequence buf file)
-           buf))
-       (error-contents-from-template ()
-         (let ((error-file-template-pathname (and (acceptor-error-template-directory acceptor)
-                                                  (probe-file (make-pathname :name (princ-to-string http-status-code)
-                                                                             :type "html"
-                                                                             :defaults (acceptor-error-template-directory acceptor))))))
-           (when error-file-template-pathname
-             (with-open-file (file error-file-template-pathname :if-does-not-exist nil :element-type 'character)
-               (when file
-                 (setf (content-type*) "text/html")
-                 (substitute-request-context-variables (file-contents file))))))))
-    (or (unless (< 300 http-status-code)
-          (call-next-method))           ; don't ever try template for positive return codes
-        (error-contents-from-template)  ; try template
-        (call-next-method))))           ; fall back to cooked message
-
+           (cooked-message "An error has occured")))))) 
 
 (defun acceptor-server-name (acceptor)
   (format nil "Hunchentoot ~A (~A)" *hunchentoot-version* (acceptor-name acceptor)))

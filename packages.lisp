@@ -33,8 +33,7 @@
            #:url-encode)
   ;; see asdf system definition
   (:import-from :hunchentoot-asd :*hunchentoot-version*)
-  (:export #:*acceptor*
-           #:*approved-return-codes*
+  (:export #:*approved-return-codes*
            #:*catch-errors-p*
            #:*default-connection-timeout*
            #:*default-content-type*
@@ -51,8 +50,6 @@
            #:*log-lisp-errors-p*
            #:*log-lisp-warnings-p*
            #:*methods-for-post-parameters*
-           #:*reply*
-           #:*request*
            #:*show-lisp-backtraces-p*
            #:*show-lisp-errors-p*
            #:*tmp-directory*
@@ -114,7 +111,6 @@
            #:acceptor-persistent-connections-p
            #:acceptor-port
            #:acceptor-read-timeout
-           #:acceptor-status-message
            #:acceptor-write-timeout
            #:authorization
            #:aux-request-value
@@ -166,7 +162,6 @@
            #:hunchentoot-error
            #:hunchentoot-warning
            #:initialize-connection-stream
-           #:log-message*
            #:maybe-invoke-debugger
            #:mime-type
            #:no-cache
@@ -193,7 +188,6 @@
            #:reply-external-format
            #:reply-external-format*
            #:request
-           #:request-acceptor
            #:request-method
            #:request-method*
            #:request-uri
@@ -209,7 +203,6 @@
            #:server-protocol
            #:server-protocol*
            #:set-cookie
-           #:set-cookie*
            #:shutdown
            #:single-threaded-taskmaster
            #:ssl-p

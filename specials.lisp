@@ -184,15 +184,6 @@ the ACCEPTOR-LOG-ACCESS function.")
   "Whether Hunchentoot should catch and log errors \(or rather invoke
 the debugger).")
 
-(defvar-unbound *acceptor*
-  "The current ACCEPTOR object while in the context of a request.")
-
-(defvar-unbound *request*
-  "The current REQUEST object while in the context of a request.")
-
-(defvar-unbound *reply*
-  "The current REPLY object while in the context of a request.")
-
 (defconstant +implementation-link+
   #+:cmu "http://www.cons.org/cmucl/"
   #+:sbcl "http://www.sbcl.org/"

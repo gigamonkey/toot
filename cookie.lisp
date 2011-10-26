@@ -43,31 +43,25 @@
       (parameter-error "~S is not a legal name for a cookie." name)))
   (call-next-method))
 
-(defun set-cookie* (cookie &optional (reply *reply*))
-  (let* ((name (cookie-name cookie))
-         (place (assoc name (cookies-out reply) :test #'string=)))
+(defun set-cookie (name reply &key (value "") expires path domain secure http-only)
+  (let ((place (assoc name (cookies-out reply) :test #'string=))
+        (cookie (make-instance 'cookie
+                   :name name
+                   :value value
+                   :expires expires
+                   :path path
+                   :domain domain
+                   :secure secure
+                   :http-only http-only)))
     (cond
-      (place
-        (setf (cdr place) cookie))
-      (t
-        (push (cons name cookie) (cookies-out reply))
-        cookie))))
-
-(defun set-cookie (name &key (value "") expires path domain secure http-only (reply *reply*))
-  (set-cookie* (make-instance 'cookie
-                 :name name
-                 :value value
-                 :expires expires
-                 :path path
-                 :domain domain
-                 :secure secure
-                 :http-only http-only)
-               reply))
+      (place (setf (cdr place) cookie))
+      (t (push (cons name cookie) (cookies-out reply))))
+    cookie))
 
 (defun cookie-date (universal-time)
   (and universal-time (rfc-1123-date universal-time)))
 
-(defmethod stringify-cookie ((cookie cookie))
+(defun stringify-cookie (cookie)
   (format nil
           "~A=~A~:[~;~:*; expires=~A~]~:[~;~:*; path=~A~]~:[~;~:*; domain=~A~]~:[~;; secure~]~:[~;; HttpOnly~]"
           (cookie-name cookie)

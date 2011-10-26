@@ -53,3 +53,10 @@ create-request-handler-thread assumes that we will create
 * Bugs?
 
 If you connect to an SSL acceptor with HTTP it hangs. Seems like something else should happen.
+
+* Things a user may want to configure or customize.
+
+Error pages
+
+Logging (where to and what format)
+

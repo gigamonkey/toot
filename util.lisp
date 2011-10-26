@@ -52,6 +52,11 @@ digits."
       (format s "~VR" base
               (random base *the-random-state*)))))
 
+(defun string-as-keyword (string)
+  "Intern STRING as keyword using the reader so that case conversion is done with the reader defaults."
+  (let ((*package* (find-package :keyword)))
+    (read-from-string string)))
+
 (defun reason-phrase (return-code)
   "Returns a reason phrase for the HTTP return code RETURN-CODE
 \(which should be an integer) or NIL for return codes Hunchentoot
@@ -284,14 +289,14 @@ asked for a persistent connection."
 values of the `Connection' header."
              (member value connection-values :test #'string-equal)))
       (let ((keep-alive-requested-p (connection-value-p "keep-alive")))
-        (values (and (acceptor-persistent-connections-p *acceptor*)
+        (values (and (acceptor-persistent-connections-p (acceptor request))
                      (or (and (eq (server-protocol request) :http/1.1)
                               (not (connection-value-p "close")))
                          (and (eq (server-protocol request) :http/1.0)
                               keep-alive-requested-p)))
                 keep-alive-requested-p)))))
 
-(defun address-string ()
+(defun address-string (request)
   "Returns a string with information about Hunchentoot suitable for
 inclusion in HTML output."
   (flet ((escape-for-html (arg)
@@ -303,19 +308,15 @@ inclusion in HTML output."
             +implementation-link+
             (escape-for-html (lisp-implementation-type))
             (escape-for-html (lisp-implementation-version))
-            (escape-for-html (or (host *request*) (acceptor-address *acceptor*)))
-            (scan ":\\d+$" (or (host *request*) ""))
-            (acceptor-port *acceptor*))))
+            (escape-for-html (or (host request) (acceptor-address (acceptor request))))
+            (scan ":\\d+$" (or (host request) ""))
+            (acceptor-port (acceptor request)))))
 
 (defun input-chunking-p ()
   "Whether input chunking is currently switched on for
 *HUNCHENTOOT-STREAM* - note that this will return NIL if the stream
 not a chunked stream."
   (chunked-stream-input-chunking-p *hunchentoot-stream*))
-
-(defun ssl-p (&optional (acceptor *acceptor*))
-  "Whether the current connection to the client is secure."
-  (ssl-adapter acceptor))
 
 (defmacro with-mapped-conditions (() &body body)
   "Run BODY with usocket condition mapping in effect, i.e. platform specific network errors will be

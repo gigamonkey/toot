@@ -203,10 +203,17 @@ implementations."))
 is set up via PROCESS-REQUEST."
   (let ((acceptor (taskmaster-acceptor taskmaster)))
     (acceptor-log-message acceptor :warning "Can't handle a new request, too many request threads already")
-    (send-response acceptor
-                   (initialize-connection-stream acceptor (make-socket-stream socket acceptor))
-                   +http-service-unavailable+
-                   :content (acceptor-status-message acceptor +http-service-unavailable+))))
+
+    ;; FIXME acceptor status message needs (at least in some code
+    ;; paths, a request object. But we're sending this before a
+    ;; request object has been created. So we make a dummy one here.
+    ;; Which'll probably work. But is gross.
+    (let ((request (make-instance 'request :acceptor acceptor :reply (make-instance 'reply :acceptor acceptor))))
+      (send-response 
+       request
+       (make-socket-stream socket acceptor)
+       +http-service-unavailable+
+       :content (acceptor-status-message request +http-service-unavailable+)))))
 
 (defun create-request-handler-thread (taskmaster socket)
   "Create a thread for handling a single request"
@@ -225,9 +232,10 @@ is set up via PROCESS-REQUEST."
     :name (format nil (taskmaster-worker-thread-name-format taskmaster) (client-as-string socket)))
    (error (cond)
           ;; need to bind *ACCEPTOR* so that LOG-MESSAGE* can do its work.
-          (let ((*acceptor* (taskmaster-acceptor taskmaster)))
-            (log-message* *lisp-errors-log-level*
-                         "Error while creating worker thread for new incoming connection: ~A" cond)))))
+          (let ((acceptor (taskmaster-acceptor taskmaster)))
+            (acceptor-log-message 
+             acceptor *lisp-errors-log-level*
+             "Error while creating worker thread for new incoming connection: ~A" cond)))))
 
 (defun client-as-string (socket)
   "A helper function which returns the client's address and port as a

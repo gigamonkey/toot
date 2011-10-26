@@ -99,8 +99,11 @@ notation."
 (defun make-socket-stream (socket acceptor)
   "Returns a stream for the socket SOCKET.  The ACCEPTOR argument is
 ignored."
-  (declare (ignore acceptor))
-  (usocket:socket-stream socket))
+  (let ((base-stream (usocket:socket-stream socket))
+        (ssl-adapter (ssl-adapter acceptor)))
+    (cond
+      (ssl-adapter (setup-ssl-stream ssl-adapter base-stream))
+      (t base-stream))))
 
 (defun make-lock (name)
   "Simple wrapper to allow LispWorks and Bordeaux Threads to coexist."
