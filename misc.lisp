@@ -107,7 +107,7 @@ via the file's suffix."
       (let ((out (send-headers request reply))
             (buf (make-array +buffer-length+ :element-type 'octet)))
         #+:clisp
-        (setf (flexi-stream-element-type *hunchentoot-stream*) 'octet)
+        (setf (flexi-stream-element-type (content-stream (acceptor request))) 'octet)
         (loop
            (when (zerop bytes-to-send)
              (return))

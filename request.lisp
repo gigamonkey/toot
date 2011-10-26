@@ -36,7 +36,7 @@
    (server-protocol :initarg :server-protocol :reader server-protocol)
    (remote-addr :initarg :remote-addr :reader remote-addr)
    (remote-port :initarg :remote-port :reader remote-port)
-   (content-stream :initarg :content-stream :reader content-stream)
+   (content-stream :initarg :content-stream :accessor content-stream)
    (cookies-in :initform nil :reader cookies-in)
    (get-parameters :initform nil :reader get-parameters)
    (post-parameters :initform nil :reader post-parameters)
@@ -96,13 +96,13 @@ already been read."
                    stream))
                 ((and content-length (> content-length already-read))
                  (decf content-length already-read)
-                 (when (input-chunking-p)
+                 (when (input-chunking-p request)
                    ;; see RFC 2616, section 4.4
                    (acceptor-log-message (acceptor request) :warning "Got Content-Length header although input chunking is on."))
                  (let ((content (make-array content-length :element-type 'octet)))
                    (read-sequence content content-stream)
                    content))
-                ((input-chunking-p)
+                ((input-chunking-p request)
                  (loop with buffer = (make-array +buffer-length+ :element-type 'octet)
                        with content = (make-array 0 :element-type 'octet :adjustable t)
                        for index = 0 then (+ index pos)
@@ -219,7 +219,7 @@ Content-Type header of the request or from
 	     ;; can't reparse multipart posts, even when FORCEd
 	     (not (eq t (slot-value request 'raw-post-data))))
     (unless (or (header-in :content-length request)
-                (input-chunking-p))
+                (input-chunking-p request))
       (acceptor-log-message (acceptor request) :warning "Can't read request body because there's ~
 no Content-Length header and input chunking is off.")
       (return-from maybe-read-post-parameters nil))

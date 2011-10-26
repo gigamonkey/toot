@@ -157,7 +157,7 @@
                   (lambda (cond)
                     (acceptor-log-message acceptor *lisp-warnings-log-level* "Warning while processing connection: ~A" cond))))
     (with-mapped-conditions ()
-      (let ((*hunchentoot-stream* (make-socket-stream socket acceptor)))
+      (let ((content-stream (make-socket-stream socket acceptor)))
         (unwind-protect
              ;; process requests until either the acceptor is shut down,
              ;; *CLOSE-HUNCHENTOOT-STREAM* has been set to T by the
@@ -167,7 +167,7 @@
                   (when (acceptor-shutdown-p acceptor)
                     (return))
                   (multiple-value-bind (headers-in method url-string protocol)
-                      (get-request-data *hunchentoot-stream*)
+                      (get-request-data content-stream)
                     ;; check if there was a request at all
                     (unless method
                       (return))
@@ -183,8 +183,8 @@
                         (when (member "chunked" transfer-encodings :test #'equalp)
                           (cond ((acceptor-input-chunking-p acceptor)
                                  ;; turn chunking on before we read the request body
-                                 (setf *hunchentoot-stream* (make-chunked-stream *hunchentoot-stream*)
-                                       (chunked-stream-input-chunking-p *hunchentoot-stream*) t))
+                                 (setf content-stream (make-chunked-stream content-stream)
+                                       (chunked-stream-input-chunking-p content-stream) t))
                                 (t (hunchentoot-error "Client tried to use ~
 chunked encoding, but acceptor is configured to not use it.")))))
 
@@ -197,23 +197,23 @@ chunked encoding, but acceptor is configured to not use it.")))))
                                              :remote-addr remote-addr
                                              :remote-port remote-port
                                              :headers-in headers-in
-                                             :content-stream *hunchentoot-stream*
+                                             :content-stream content-stream
                                              :method method
                                              :uri url-string
                                              :server-protocol protocol)
                                            reply))))
-                    (force-output *hunchentoot-stream*)
-                    (setq *hunchentoot-stream* (reset-connection-stream acceptor *hunchentoot-stream*))
+                    (force-output content-stream)
+                    (setf content-stream (reset-connection-stream acceptor content-stream))
                     (when *close-hunchentoot-stream*
                       (return)))))
-          (when *hunchentoot-stream*
+          (when content-stream
             ;; as we are at the end of the request here, we ignore all
             ;; errors that may occur while flushing and/or closing the
             ;; stream.
             (ignore-errors*
-              (force-output *hunchentoot-stream*))
+              (force-output content-stream))
             (ignore-errors*
-              (close *hunchentoot-stream* :abort t))))))))
+              (close content-stream :abort t))))))))
 
 (defun acceptor-log-access (request &key return-code)
   (let ((acceptor (acceptor request))

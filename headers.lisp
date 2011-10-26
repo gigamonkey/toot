@@ -53,7 +53,8 @@
       content-type))
 
 (defun start-output (request reply return-code &optional (content nil content-provided-p))
-  (let* ((chunkedp (and (acceptor-output-chunking-p (acceptor reply))
+  (let* ((acceptor (acceptor request))
+         (chunkedp (and (acceptor-output-chunking-p acceptor)
                         (eq (server-protocol request) :http/1.1)
                         ;; only turn chunking on if the content
                         ;; length is unknown at this point...
@@ -78,7 +79,7 @@
         (setf (header-out :transfer-encoding reply) "chunked"))
       (cond (keep-alive-p
              (setf *close-hunchentoot-stream* nil)
-             (when (and (acceptor-read-timeout (acceptor reply))
+             (when (and (acceptor-read-timeout acceptor)
                         (or (not (eq (server-protocol request) :http/1.1))
                             keep-alive-requested-p))
                ;; persistent connections are implicitly assumed for
@@ -86,12 +87,12 @@
                ;; client has explicitly asked for one
                (setf (header-out :connection reply) "Keep-Alive"
                      (header-out :keep-alive reply)
-                     (format nil "timeout=~D" (acceptor-read-timeout (acceptor reply))))))
+                     (format nil "timeout=~D" (acceptor-read-timeout acceptor)))))
             (t (setf (header-out :connection reply) "Close"))))
     (unless (and (header-out-set-p :server reply)
                  (null (header-out :server reply)))
       (setf (header-out :server reply) (or (header-out :server reply)
-                                     (acceptor-server-name (acceptor reply)))))
+                                     (acceptor-server-name acceptor))))
     (setf (header-out :date reply) (rfc-1123-date))
 
     (when (stringp content)
@@ -111,7 +112,7 @@
     (setq *headers-sent* t)
     (send-response 
      request
-     *hunchentoot-stream*
+     (content-stream request)
      return-code
      :headers (headers-out reply)
      :cookies (cookies-out reply)
@@ -121,10 +122,10 @@
       (throw 'request-processed nil))
     (when chunkedp
       ;; turn chunking on after the headers have been sent
-      (unless (typep *hunchentoot-stream* 'chunked-stream)
-        (setq *hunchentoot-stream* (make-chunked-stream *hunchentoot-stream*)))
-      (setf (chunked-stream-output-chunking-p *hunchentoot-stream*) t))
-    *hunchentoot-stream*))
+      (unless (typep (content-stream request) 'chunked-stream)
+        (setf (content-stream request) (make-chunked-stream (content-stream request))))
+      (setf (chunked-stream-output-chunking-p (content-stream request)) t))
+    (content-stream request)))
 
 (defun send-response (request stream status-code &key headers cookies content)
   (let ((reply (reply request)))

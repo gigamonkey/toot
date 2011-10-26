@@ -33,13 +33,6 @@
      ,@(when doc (list doc))))
 
 (eval-when (:compile-toplevel :execute :load-toplevel)
-  (defmacro defvar-unbound (name &optional (doc-string ""))
-    "Convenience macro to declare unbound special variables with a
-documentation string."
-    `(progn
-      (defvar ,name)
-      (setf (documentation ',name 'variable) ,doc-string)))
-
   (defvar *http-reason-phrase-map* (make-hash-table)
     "Used to map numerical return codes to reason phrases.")
   
@@ -114,9 +107,6 @@ date format.")
 
 (defvar *the-random-state* (make-random-state t)
   "A fresh random state.")
-
-(defvar-unbound *hunchentoot-stream*
-  "The stream representing the socket Hunchentoot is listening on.")
 
 (defvar *close-hunchentoot-stream* nil
   "Will be set to T if the Hunchentoot socket stream has to be

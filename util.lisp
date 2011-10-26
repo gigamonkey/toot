@@ -312,11 +312,10 @@ inclusion in HTML output."
             (scan ":\\d+$" (or (host request) ""))
             (acceptor-port (acceptor request)))))
 
-(defun input-chunking-p ()
-  "Whether input chunking is currently switched on for
-*HUNCHENTOOT-STREAM* - note that this will return NIL if the stream
-not a chunked stream."
-  (chunked-stream-input-chunking-p *hunchentoot-stream*))
+(defun input-chunking-p (request)
+  "Whether input chunking is currently switched on for the acceptors
+content stream. N.B. This is different "
+  (chunked-stream-input-chunking-p (content-stream request)))
 
 (defmacro with-mapped-conditions (() &body body)
   "Run BODY with usocket condition mapping in effect, i.e. platform specific network errors will be
