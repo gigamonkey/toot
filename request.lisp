@@ -124,15 +124,15 @@ slot values are computed in this :AFTER method."
                  (match-start (position #\? uri)))
             (cond
              (match-start
-              (setq script-name (subseq uri 0 match-start)
+              (setf script-name (subseq uri 0 match-start)
                     query-string (subseq uri (1+ match-start))))
-             (t (setq script-name uri))))
+             (t (setf script-name uri))))
           ;; some clients (e.g. ASDF-INSTALL) send requests like
           ;; "GET http://server/foo.html HTTP/1.0"...
-          (setq script-name (regex-replace "^https?://[^/]+" script-name ""))
+          (setf script-name (regex-replace "^https?://[^/]+" script-name ""))
           ;; compute GET parameters from query string and cookies from
           ;; the incoming 'Cookie' header
-          (setq get-parameters
+          (setf get-parameters
                 (let ((*substitution-char* #\?))
                   (form-url-encoded-list-to-alist (split "&" query-string)))
                 cookies-in
@@ -394,7 +394,7 @@ content even if the request method is not POST."
   (when (and force-binary force-text)
     (parameter-error "It doesn't make sense to set both FORCE-BINARY and FORCE-TEXT to a true value."))
   (unless (or external-format force-binary)
-    (setq external-format (or (external-format-from-content-type (header-in :content-type request))
+    (setf external-format (or (external-format-from-content-type (header-in :content-type request))
                               (when force-text
                                 *hunchentoot-default-external-format*))))
   (let ((raw-post-data (or (slot-value request 'raw-post-data)

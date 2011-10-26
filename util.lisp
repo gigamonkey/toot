@@ -169,8 +169,8 @@ which will be applied to each element of VECTOR before the result is
 stored in the new vector.  The resulting vector will have a fill
 pointer set to its end.
 
-The macro also uses SETQ to store the new vector in VECTOR."
-  `(setq ,vector
+The macro also uses SETF to store the new vector in VECTOR."
+  `(setf ,vector
          (loop with length = (length ,vector)
                with new-vector = (make-array length
                                              :element-type ,new-type
@@ -202,7 +202,7 @@ the external format EXTERNAL-FORMAT."
                 (peek ()
                   (aref string i))
                 (advance ()
-                  (setq char (peek))
+                  (setf char (peek))
                   (incf i)))
          (cond
           ((char= #\% char)
@@ -210,7 +210,7 @@ the external format EXTERNAL-FORMAT."
            (cond
             ((char= #\u (peek))
              (unless unicodep
-               (setq unicodep t)
+               (setf unicodep t)
                (upgrade-vector vector '(integer 0 65535)))
              (advance)
              (push-integer (decode-hex 4)))

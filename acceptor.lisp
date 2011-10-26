@@ -177,7 +177,7 @@
                           (transfer-encodings (cdr (assoc* :transfer-encoding headers-in))))
 
                       (when transfer-encodings
-                        (setq transfer-encodings
+                        (setf transfer-encodings
                               (split "\\s*,\\s*" transfer-encodings))
 
                         (when (member "chunked" transfer-encodings :test #'equalp)
@@ -288,7 +288,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
           ;; if the headers were already sent, the error
           ;; happened within the body and we have to close
           ;; the stream
-          (when *headers-sent* (setq *close-hunchentoot-stream* t))
+          (when *headers-sent* (setf *close-hunchentoot-stream* t))
           (throw 'handler-done (values nil cond (get-backtrace)))))
        (warning
         (lambda (cond)

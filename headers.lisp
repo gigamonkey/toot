@@ -65,7 +65,7 @@
     (multiple-value-bind (keep-alive-p keep-alive-requested-p)
         (keep-alive-p request)
       (when keep-alive-p
-        (setq keep-alive-p
+        (setf keep-alive-p
               ;; use keep-alive if there's a way for the client to
               ;; determine when all content is sent (or if there
               ;; is no content)
@@ -109,7 +109,7 @@
     ;; send headers only once
     (when *headers-sent*
       (return-from start-output))
-    (setq *headers-sent* t)
+    (setf *headers-sent* t)
     (send-response 
      request
      (content-stream request)
@@ -197,7 +197,7 @@ protocol of the request."
          (when *header-stream*
            (format *header-stream* "~A~%" first-line))
          (let ((headers (and protocol (read-http-headers stream *header-stream*))))
-           (unless protocol (setq protocol "HTTP/0.9"))
+           (unless protocol (setf protocol "HTTP/0.9"))
            ;; maybe handle 'Expect: 100-continue' header
            (when-let (expectations (cdr (assoc* :expect headers)))
              (when (member "100-continue" (split "\\s*,\\s*" expectations) :test #'equalp)
