@@ -248,7 +248,7 @@ alist.  Both names and values are url-decoded while doing this."
                                                                :external-format external-format)
                             do (format s "%~2,'0x" octet)))))))
 
-(defun parse-content-type (content-type-header)
+(defun parse-content-type-header (content-type-header)
   "Reads and parses a `Content-Type' header and returns it as three
 values - the type, the subtype, and the requests' character set as
 specified in the 'charset' parameter in the header, if there is one
@@ -260,7 +260,7 @@ to be the corresponding header value as a string."
             (type (read-token stream))
             (subtype (if (eql #\/ (read-char* stream nil))
                        (read-token stream)
-                       (return-from parse-content-type
+                       (return-from parse-content-type-header
                          ;; try to return something meaningful
                          (values "application" "octet-stream" nil))))
             (parameters (read-name-value-pairs stream))

@@ -227,7 +227,7 @@ no Content-Length header and input chunking is off.")
       (return-from maybe-read-post-parameters nil))
     (handler-case*
         (multiple-value-bind (type subtype charset)
-              (parse-content-type (header-in :content-type request))
+              (parse-content-type-header (header-in :content-type request))
           (let ((external-format (or external-format
                                      (when charset
                                        (handler-case
@@ -356,7 +356,7 @@ of the content type header provided in CONTENT-TYPE.  If the content
 type was not set or if the character set specified was invalid, NIL is
 returned."
   (when content-type
-    (when-let (charset (nth-value 2 (parse-content-type content-type)))
+    (when-let (charset (nth-value 2 (parse-content-type-header content-type)))
       (handler-case
           (make-external-format (as-keyword charset) :eol-style :lf)
         (error ()
