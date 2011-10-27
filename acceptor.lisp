@@ -169,10 +169,7 @@
                   (multiple-value-bind (headers-in method url-string protocol)
                       (get-request-data content-stream)
                     ;; check if there was a request at all
-                    (unless method
-                      (return))
-                    ;; bind per-request special variables, then process the
-                    ;; request
+                    (unless method (return))
                     (let ((reply (make-instance 'reply :acceptor acceptor))
                           (transfer-encodings (cdr (assoc* :transfer-encoding headers-in))))
 
@@ -285,10 +282,9 @@ chunked encoding, but acceptor is configured to not use it.")))))
   (handler-bind 
       ((error
         (lambda (cond)
-          ;; if the headers were already sent, the error
-          ;; happened within the body and we have to close
-          ;; the stream
-          (when *headers-sent* (setf *close-hunchentoot-stream* t))
+          ;; if the headers were already sent, the error happened
+          ;; within the body and we have to close the stream
+          (when (headers-sent-p reply) (setf *close-hunchentoot-stream* t))
           (throw 'handler-done (values nil cond (get-backtrace)))))
        (warning
         (lambda (cond)

@@ -148,8 +148,7 @@ slot values are computed in this :AFTER method."
   (catch 'request-processed ;; used by HTTP HEAD handling to end
                             ;; request processing in a HEAD request
                             ;; (see START-OUTPUT)
-    (let (*tmp-files*
-          *headers-sent*)
+    (let (*tmp-files*)
       (unwind-protect
            (with-mapped-conditions ()
              (labels
@@ -170,7 +169,7 @@ slot values are computed in this :AFTER method."
                  (when error
                    ;; error occured in request handler
                    (report-error-to-client error backtrace))
-                 (unless *headers-sent*
+                 (unless (headers-sent-p reply)
                    (handler-case
                        (with-debugger
                          (start-output request reply (return-code reply)

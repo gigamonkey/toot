@@ -112,10 +112,6 @@ date format.")
   "Will be set to T if the Hunchentoot socket stream has to be
 closed at the end of the request.")
 
-(defvar *headers-sent* nil
-  "Used internally to check whether the reply headers have
-already been sent for this request.")
-
 (defvar *file-upload-hook* nil
   "If this is not NIL, it should be a unary function which will
 be called with a pathname for each file which is uploaded to

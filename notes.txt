@@ -46,6 +46,8 @@ machinery?
 
 Break out logging into a separate object.
 
+Possibly combine request and reply objects into a single object.
+
 * Threading
 
 create-request-handler-thread assumes that we will create 

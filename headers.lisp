@@ -107,9 +107,9 @@
       ;; a different content length, but that will wrong anyway
       (setf (header-out :content-length reply) (length content)))
     ;; send headers only once
-    (when *headers-sent*
+    (when (headers-sent-p reply)
       (return-from start-output))
-    (setf *headers-sent* t)
+    (setf (headers-sent-p reply) t)
     (send-response 
      request
      (content-stream request)
