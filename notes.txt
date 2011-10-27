@@ -62,3 +62,15 @@ Error pages
 
 Logging (where to and what format)
 
+
+* Flow
+
+start -> 
+start-listening, execute-acceptor ->
+accept-connections -> 
+handle-incoming-connection -> 
+process-connection -> 
+process-request (in loop) -> 
+handle-request -> 
+dispatch to user code.
+

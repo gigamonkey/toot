@@ -131,20 +131,11 @@ implementations."))
 
 ;; Taskmaster implementation
 
-(defmethod shutdown ((taskmaster thread-per-connection-taskmaster) acceptor)
-  ;; just wait until the acceptor process has finished, then return
-  (loop
-   (unless (bt:thread-alive-p (acceptor-process taskmaster))
-     (return))
-   (sleep 1))
-  taskmaster)
-
 (defmethod execute-acceptor ((taskmaster thread-per-connection-taskmaster) acceptor)
   (setf (acceptor-process taskmaster)
         (bt:make-thread
          (lambda () (accept-connections acceptor))
-         :name (format nil "hunchentoot-listener-~A:~A"
-                       (or (acceptor-address acceptor) "*") (acceptor-port acceptor)))))
+         :name (listen-thread-name acceptor))))
 
 (defmethod handle-incoming-connection ((taskmaster thread-per-connection-taskmaster) acceptor socket)
   ;; Here's the idea, with the stipulations given in THREAD-PER-CONNECTION-TASKMASTER
@@ -155,23 +146,33 @@ implementations."))
   ;;  - Otherwise if we're between MAX-THREAD-COUNT and MAX-ACCEPT-COUNT,
   ;;    wait until the connection count drops, then handle the request
   ;;  - Otherwise, increment REQUEST-COUNT and start a taskmaster
-  (cond ((null (taskmaster-max-thread-count taskmaster))
-         ;; No limit on number of requests, just start a taskmaster
-         (create-request-handler-thread taskmaster acceptor socket))
-        ((if (taskmaster-max-accept-count taskmaster)
-           (>= (taskmaster-request-count taskmaster) (taskmaster-max-accept-count taskmaster))
-           (>= (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster)))
-         ;; Send HTTP 503 to indicate that we can't handle the request right now
-         (send-service-unavailable-reply acceptor socket))
+  (cond
+    ((null (taskmaster-max-thread-count taskmaster))
+     ;; No limit on number of requests, just start a taskmaster
+     (create-request-handler-thread taskmaster acceptor socket))
+    ((if (taskmaster-max-accept-count taskmaster)
+         (>= (taskmaster-request-count taskmaster) (taskmaster-max-accept-count taskmaster))
+         (>= (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster)))
+     ;; Send HTTP 503 to indicate that we can't handle the request right now
+     (send-service-unavailable-reply acceptor socket))
+    
+    ((and (taskmaster-max-accept-count taskmaster)
+          (>= (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster)))
+     ;; Wait for a request to finish, then carry on
+     (wait-for-free-connection taskmaster)
+     (create-request-handler-thread taskmaster acceptor socket))
+    
+    (t
+     (create-request-handler-thread taskmaster acceptor socket))))
 
-        ((and (taskmaster-max-accept-count taskmaster)
-              (>= (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster)))
-         ;; Wait for a request to finish, then carry on
-         (wait-for-free-connection taskmaster)
-         (create-request-handler-thread taskmaster acceptor socket))
+(defmethod shutdown ((taskmaster thread-per-connection-taskmaster) acceptor)
+  ;; just wait until the acceptor process has finished, then return
+  (loop
+   (unless (bt:thread-alive-p (acceptor-process taskmaster))
+     (return))
+   (sleep 1))
+  taskmaster)
 
-        (t
-         (create-request-handler-thread taskmaster acceptor socket))))
 
 (defun increment-taskmaster-request-count (taskmaster)
   (when (taskmaster-max-thread-count taskmaster)
@@ -227,20 +228,22 @@ is set up via PROCESS-REQUEST."
       (unwind-protect
            (process-connection acceptor socket)
         (decrement-taskmaster-request-count taskmaster)))
-    :name (format nil (taskmaster-worker-thread-name-format taskmaster) (client-as-string socket)))
+    :name (request-handler-thread-name taskmaster socket))
    (error (cond)
           ;; need to bind *ACCEPTOR* so that LOG-MESSAGE* can do its work.
           (acceptor-log-message 
            acceptor *lisp-errors-log-level*
            "Error while creating worker thread for new incoming connection: ~A" cond))))
 
-(defun client-as-string (socket)
-  "A helper function which returns the client's address and port as a
-   string and tries to act robustly in the presence of network problems."
+(defun listen-thread-name (acceptor)
+  (with-accessors ((address acceptor-address) (port acceptor-port)) acceptor
+    (format nil "hunchentoot-listener-~A:~A" (or address "*") port)))
+
+(defun request-handler-thread-name (taskmaster socket)
   (let ((address (usocket:get-peer-address socket))
         (port (usocket:get-peer-port socket)))
-    (when (and address port)
-      (format nil "~A:~A"
-              (usocket:vector-quad-to-dotted-quad address)
-              port))))
-
+    (format nil (taskmaster-worker-thread-name-format taskmaster) 
+            (cond
+              ((and address port)
+               (format nil "~A:~A" (usocket:vector-quad-to-dotted-quad address) port))
+              (t "Unknown endpoint")))))

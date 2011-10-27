@@ -191,7 +191,6 @@
            #:request-uri
            #:request-uri*
            #:require-authorization
-           #:reset-connection-stream
            #:return-code
            #:return-code*
            #:rfc-1123-date

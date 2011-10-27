@@ -96,6 +96,9 @@
      :key ssl-private-key-file
     :password ssl-private-key-password)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Start and stop an acceptor
+
 (defun start (acceptor)
   (setf (acceptor-shutdown-p acceptor) nil)
   (start-listening acceptor)
@@ -113,18 +116,6 @@
   (usocket:socket-close (acceptor-listen-socket acceptor))
   (setf (acceptor-listen-socket acceptor) nil)
   acceptor)
-
-(defun reset-connection-stream (acceptor stream)
-  (declare (ignore acceptor))
-  ;; turn chunking off at this point
-  (cond ((typep stream 'chunked-stream)
-         ;; flush the stream first and check if there's unread input
-         ;; which would be an error
-         (setf (chunked-stream-output-chunking-p stream) nil
-               (chunked-stream-input-chunking-p stream) nil)
-         ;; switch back to bare socket stream
-         (chunked-stream-stream stream))
-        (t stream)))
 
 (defun do-with-acceptor-request-count-incremented (acceptor function)
   (with-lock-held ((acceptor-shutdown-lock acceptor))
@@ -145,15 +136,22 @@
   `(do-with-acceptor-request-count-incremented ,acceptor (lambda () ,@body)))
 
 (defun process-connection (acceptor socket)
+  "Called by taskmaster's handle-incoming-connection."
   (handler-bind ((error
                   ;; abort if there's an error which isn't caught inside
                   (lambda (cond)
-                    (acceptor-log-message acceptor *lisp-errors-log-level* "Error while processing connection: ~A" cond)
+                    (acceptor-log-message 
+                     acceptor 
+                     *lisp-errors-log-level* 
+                     "Error while processing connection: ~A" cond)
                     (return-from process-connection)))
                  (warning
                   ;; log all warnings which aren't caught inside
                   (lambda (cond)
-                    (acceptor-log-message acceptor *lisp-warnings-log-level* "Warning while processing connection: ~A" cond))))
+                    (acceptor-log-message 
+                     acceptor
+                     *lisp-warnings-log-level*
+                     "Warning while processing connection: ~A" cond))))
     (with-mapped-conditions ()
       (let ((content-stream (make-socket-stream socket acceptor)))
         (unwind-protect
@@ -161,8 +159,8 @@
              ;; down, close-stream-p on the reply is T, or the peer
              ;; fails to send a request
              (loop
-                (when (acceptor-shutdown-p acceptor)
-                  (return))
+                (when (acceptor-shutdown-p acceptor) (return))
+                
                 (multiple-value-bind (headers-in method url-string protocol)
                     (get-request-data content-stream)
                   ;; check if there was a request at all
@@ -175,11 +173,12 @@
                             (split "\\s*,\\s*" transfer-encodings))
 
                       (when (member "chunked" transfer-encodings :test #'equalp)
-                        (cond ((acceptor-input-chunking-p acceptor)
-                               ;; turn chunking on before we read the request body
-                               (setf content-stream (make-chunked-stream content-stream)
-                                     (chunked-stream-input-chunking-p content-stream) t))
-                              (t (hunchentoot-error "Client tried to use ~
+                        (cond 
+                          ((acceptor-input-chunking-p acceptor)
+                           ;; turn chunking on before we read the request body
+                           (setf content-stream (make-chunked-stream content-stream)
+                                 (chunked-stream-input-chunking-p content-stream) t))
+                          (t (hunchentoot-error "Client tried to use ~
 chunked encoding, but acceptor is configured to not use it.")))))
 
                     (multiple-value-bind (remote-addr remote-port)
@@ -197,7 +196,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
                                            :server-protocol protocol)
                                          reply)))
                     (force-output content-stream)
-                    (setf content-stream (reset-connection-stream acceptor content-stream))
+                    (setf content-stream (unchunked-stream content-stream))
                     (when (close-stream-p reply) (return)))))
 
           (when content-stream
@@ -206,6 +205,16 @@ chunked encoding, but acceptor is configured to not use it.")))))
             ;; stream.
             (ignore-errors* (force-output content-stream))
             (ignore-errors* (close content-stream :abort t))))))))
+
+(defun unchunked-stream (stream)
+  (cond 
+    ((typep stream 'chunked-stream)
+     ;; flush the stream first and check if there's unread input
+     ;; which would be an error
+     (setf (chunked-stream-output-chunking-p stream) nil
+           (chunked-stream-input-chunking-p stream) nil)
+     (chunked-stream-stream stream))
+    (t stream)))
 
 (defun acceptor-log-access (request &key return-code)
   (let ((acceptor (acceptor request))
@@ -246,6 +255,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
   (values))
 
 (defun accept-connections (acceptor)
+  "Called by taskmaster's execute-acceptor."
   (usocket:with-server-socket (listener (acceptor-listen-socket acceptor))
     (loop
        (when (acceptor-shutdown-p acceptor) (return))
@@ -260,16 +270,6 @@ chunked encoding, but acceptor is configured to not use it.")))))
                          (acceptor-write-timeout acceptor))
            (handle-incoming-connection (taskmaster acceptor) acceptor client-connection))))))
 
-(defun acceptor-dispatch-request (acceptor request reply)
-  (cond
-    ((acceptor-document-root acceptor)
-     (handle-static-file request reply 
-                         (merge-pathnames (if (equal (script-name request) "/")
-                                              "index.html"
-                                              (subseq (script-name request) 1))
-                                          (acceptor-document-root acceptor))))
-    (t (setf (return-code reply) +http-not-found+))))
-
 (defun handle-request (acceptor request reply)
   (handler-bind 
       ((error
@@ -282,8 +282,18 @@ chunked encoding, but acceptor is configured to not use it.")))))
         (lambda (cond)
           (when *log-lisp-warnings-p*
             (acceptor-log-message acceptor *lisp-warnings-log-level* "~A" cond)))))
-    (with-debugger
-      (acceptor-dispatch-request acceptor request reply))))
+    (let ((dispatcher (make-static-file-dispatcher (acceptor-document-root acceptor))))
+      (with-debugger
+        (funcall dispatcher request reply)))))
+
+(defun make-static-file-dispatcher (document-root)
+  (lambda (request reply)
+    (handle-static-file
+     request reply 
+     (merge-pathnames (if (equal (script-name request) "/")
+                          "index.html"
+                          (subseq (script-name request) 1))
+                      document-root))))
 
 (defun acceptor-status-message (request http-status-code &rest properties &key &allow-other-keys)
   "This function is called after the request's handler has been
