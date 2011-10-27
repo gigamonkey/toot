@@ -250,7 +250,7 @@ unknown character set ~A in request content type."
         ;; that we aren't finished reading from the request stream and
         ;; can't send a reply - to be revisited
         (setf (return-code (reply request)) +http-bad-request+
-              *close-hunchentoot-stream* t)
+              (close-stream-p (reply request)) t)
         (abort-request-handler)))))
 
 (defun recompute-request-parameters (request &key (external-format *hunchentoot-default-external-format*))

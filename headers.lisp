@@ -78,7 +78,7 @@
       (when chunkedp
         (setf (header-out :transfer-encoding reply) "chunked"))
       (cond (keep-alive-p
-             (setf *close-hunchentoot-stream* nil)
+             (setf (close-stream-p reply) nil)
              (when (and (acceptor-read-timeout acceptor)
                         (or (not (eq (server-protocol request) :http/1.1))
                             keep-alive-requested-p))

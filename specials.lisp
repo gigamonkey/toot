@@ -108,10 +108,6 @@ date format.")
 (defvar *the-random-state* (make-random-state t)
   "A fresh random state.")
 
-(defvar *close-hunchentoot-stream* nil
-  "Will be set to T if the Hunchentoot socket stream has to be
-closed at the end of the request.")
-
 (defvar *file-upload-hook* nil
   "If this is not NIL, it should be a unary function which will
 be called with a pathname for each file which is uploaded to

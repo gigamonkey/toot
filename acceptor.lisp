@@ -159,58 +159,55 @@
     (with-mapped-conditions ()
       (let ((content-stream (make-socket-stream socket acceptor)))
         (unwind-protect
-             ;; process requests until either the acceptor is shut down,
-             ;; *CLOSE-HUNCHENTOOT-STREAM* has been set to T by the
-             ;; handler, or the peer fails to send a request
+             ;; process requests until either the acceptor is shut
+             ;; down, close-stream-p on the reply is T, or the peer
+             ;; fails to send a request
              (loop
-                (let ((*close-hunchentoot-stream* t))
-                  (when (acceptor-shutdown-p acceptor)
-                    (return))
-                  (multiple-value-bind (headers-in method url-string protocol)
-                      (get-request-data content-stream)
-                    ;; check if there was a request at all
-                    (unless method (return))
-                    (let ((reply (make-instance 'reply :acceptor acceptor))
-                          (transfer-encodings (cdr (assoc* :transfer-encoding headers-in))))
+                (when (acceptor-shutdown-p acceptor)
+                  (return))
+                (multiple-value-bind (headers-in method url-string protocol)
+                    (get-request-data content-stream)
+                  ;; check if there was a request at all
+                  (unless method (return))
+                  (let ((reply (make-instance 'reply :acceptor acceptor))
+                        (transfer-encodings (cdr (assoc* :transfer-encoding headers-in))))
 
-                      (when transfer-encodings
-                        (setf transfer-encodings
-                              (split "\\s*,\\s*" transfer-encodings))
+                    (when transfer-encodings
+                      (setf transfer-encodings
+                            (split "\\s*,\\s*" transfer-encodings))
 
-                        (when (member "chunked" transfer-encodings :test #'equalp)
-                          (cond ((acceptor-input-chunking-p acceptor)
-                                 ;; turn chunking on before we read the request body
-                                 (setf content-stream (make-chunked-stream content-stream)
-                                       (chunked-stream-input-chunking-p content-stream) t))
-                                (t (hunchentoot-error "Client tried to use ~
+                      (when (member "chunked" transfer-encodings :test #'equalp)
+                        (cond ((acceptor-input-chunking-p acceptor)
+                               ;; turn chunking on before we read the request body
+                               (setf content-stream (make-chunked-stream content-stream)
+                                     (chunked-stream-input-chunking-p content-stream) t))
+                              (t (hunchentoot-error "Client tried to use ~
 chunked encoding, but acceptor is configured to not use it.")))))
 
-                      (multiple-value-bind (remote-addr remote-port)
-                          (get-peer-address-and-port socket)
-                        (with-acceptor-request-count-incremented (acceptor)
-                          (process-request (make-instance 'request
-                                             :acceptor acceptor
-                                             :reply reply
-                                             :remote-addr remote-addr
-                                             :remote-port remote-port
-                                             :headers-in headers-in
-                                             :content-stream content-stream
-                                             :method method
-                                             :uri url-string
-                                             :server-protocol protocol)
-                                           reply))))
+                    (multiple-value-bind (remote-addr remote-port)
+                        (get-peer-address-and-port socket)
+                      (with-acceptor-request-count-incremented (acceptor)
+                        (process-request (make-instance 'request
+                                           :acceptor acceptor
+                                           :reply reply
+                                           :remote-addr remote-addr
+                                           :remote-port remote-port
+                                           :headers-in headers-in
+                                           :content-stream content-stream
+                                           :method method
+                                           :uri url-string
+                                           :server-protocol protocol)
+                                         reply)))
                     (force-output content-stream)
                     (setf content-stream (reset-connection-stream acceptor content-stream))
-                    (when *close-hunchentoot-stream*
-                      (return)))))
+                    (when (close-stream-p reply) (return)))))
+
           (when content-stream
             ;; as we are at the end of the request here, we ignore all
             ;; errors that may occur while flushing and/or closing the
             ;; stream.
-            (ignore-errors*
-              (force-output content-stream))
-            (ignore-errors*
-              (close content-stream :abort t))))))))
+            (ignore-errors* (force-output content-stream))
+            (ignore-errors* (close content-stream :abort t))))))))
 
 (defun acceptor-log-access (request &key return-code)
   (let ((acceptor (acceptor request))
@@ -284,7 +281,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
         (lambda (cond)
           ;; if the headers were already sent, the error happened
           ;; within the body and we have to close the stream
-          (when (headers-sent-p reply) (setf *close-hunchentoot-stream* t))
+          (when (headers-sent-p reply) (setf (close-stream-p reply) t))
           (throw 'handler-done (values nil cond (get-backtrace)))))
        (warning
         (lambda (cond)

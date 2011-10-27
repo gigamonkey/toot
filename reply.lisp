@@ -35,7 +35,8 @@
    (return-code :initform +http-ok+ :accessor return-code)
    (external-format :initform *hunchentoot-default-external-format* :accessor reply-external-format)
    (cookies-out :initform nil :accessor cookies-out)
-   (headers-sent-p :initform nil :accessor headers-sent-p)))
+   (headers-sent-p :initform nil :accessor headers-sent-p)
+   (close-stream-p :initform t :accessor close-stream-p)))
 
 (defmethod initialize-instance :after ((reply reply) &key)
   (setf (header-out :content-type reply) *default-content-type*))
