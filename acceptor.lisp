@@ -3,19 +3,19 @@
 ;;; Redistribution and use in source and binary forms, with or without
 ;;; modification, are permitted provided that the following conditions
 ;;; are met:
-
+;;;
 ;;;   * Redistributions of source code must retain the above copyright
 ;;;     notice, this list of conditions and the following disclaimer.
-
+;;;
 ;;;   * Redistributions in binary form must reproduce the above
 ;;;     copyright notice, this list of conditions and the following
 ;;;     disclaimer in the documentation and/or other materials
 ;;;     provided with the distribution.
-
+;;;
 ;;; THIS SOFTWARE IS PROVIDED BY THE AUTHOR 'AS IS' AND ANY EXPRESSED
 ;;; OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 ;;; WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-;;; ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+;;; ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
 ;;; DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
 ;;; DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
 ;;; GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
@@ -34,7 +34,7 @@
   ((port :initarg :port :reader acceptor-port)
    (address :initarg :address :reader acceptor-address)
    (name :initarg :name :accessor acceptor-name)
-   (taskmaster :initarg :taskmaster :reader acceptor-taskmaster)
+   (taskmaster :initarg :taskmaster :reader taskmaster)
    (output-chunking-p :initarg :output-chunking-p :accessor acceptor-output-chunking-p)
    (input-chunking-p :initarg :input-chunking-p :accessor acceptor-input-chunking-p)
    (persistent-connections-p :initarg :persistent-connections-p :accessor acceptor-persistent-connections-p)
@@ -99,14 +99,12 @@
 (defun start (acceptor)
   (setf (acceptor-shutdown-p acceptor) nil)
   (start-listening acceptor)
-  (let ((taskmaster (acceptor-taskmaster acceptor)))
-    (setf (taskmaster-acceptor taskmaster) acceptor)
-    (execute-acceptor taskmaster))
+  (execute-acceptor (taskmaster acceptor) acceptor)
   acceptor)
 
 (defun stop (acceptor &key soft)
   (setf (acceptor-shutdown-p acceptor) t)
-  (shutdown (acceptor-taskmaster acceptor))
+  (shutdown (taskmaster acceptor) acceptor)
   (when soft
     (with-lock-held ((acceptor-shutdown-lock acceptor))
       (when (plusp (accessor-requests-in-progress acceptor))
@@ -234,36 +232,33 @@ chunked encoding, but acceptor is configured to not use it.")))))
             (iso-time) log-level
             format-string format-arguments)))
 
-;; usocket implementation
-
 (defun start-listening (acceptor)
   (when (acceptor-listen-socket acceptor)
     (hunchentoot-error "acceptor ~A is already listening" acceptor))
+
   (setf (acceptor-listen-socket acceptor)
-        (usocket:socket-listen (or (acceptor-address acceptor)
-                                   usocket:*wildcard-host*)
-                               (acceptor-port acceptor)
-                               :reuseaddress t
-			       :backlog (acceptor-listen-backlog acceptor)
-                               :element-type '(unsigned-byte 8)))
+        (usocket:socket-listen
+         (or (acceptor-address acceptor) usocket:*wildcard-host*)
+         (acceptor-port acceptor)
+         :reuseaddress t
+         :backlog (acceptor-listen-backlog acceptor)
+         :element-type '(unsigned-byte 8)))
   (values))
 
 (defun accept-connections (acceptor)
   (usocket:with-server-socket (listener (acceptor-listen-socket acceptor))
     (loop
-     (when (acceptor-shutdown-p acceptor)
-       (return))
-     (when (usocket:wait-for-input listener :ready-only t :timeout +new-connection-wait-time+)
-       (when-let (client-connection
-                  (handler-case (usocket:socket-accept listener)                               
-                    ;; ignore condition
-                    (usocket:connection-aborted-error ())))
-         (set-timeouts client-connection
-                       (acceptor-read-timeout acceptor)
-                       (acceptor-write-timeout acceptor))
-         (handle-incoming-connection (acceptor-taskmaster acceptor)
-                                     client-connection))))))
+       (when (acceptor-shutdown-p acceptor) (return))
 
+       (when (usocket:wait-for-input listener :ready-only t :timeout +new-connection-wait-time+)
+         (when-let (client-connection
+                    (handler-case (usocket:socket-accept listener)                               
+                      ;; ignore condition
+                      (usocket:connection-aborted-error ())))
+           (set-timeouts client-connection
+                         (acceptor-read-timeout acceptor)
+                         (acceptor-write-timeout acceptor))
+           (handle-incoming-connection (taskmaster acceptor) acceptor client-connection))))))
 
 (defun acceptor-dispatch-request (acceptor request reply)
   (cond

@@ -141,11 +141,9 @@
            #:dispatch-easy-handlers
            #:easy-acceptor
            #:escape-for-html
-           #:execute-acceptor
            #:get-parameter
            #:get-parameters
            #:get-parameters*
-           #:handle-incoming-connection
            #:handle-if-modified-since
            #:handle-request
            #:handle-static-file
@@ -210,7 +208,6 @@
            #:start-listening
            #:stop
            #:taskmaster
-           #:taskmaster-acceptor
            #:thread-per-connection-taskmaster
            #:url-decode
            #:url-encode

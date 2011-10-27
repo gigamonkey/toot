@@ -27,26 +27,26 @@
 
 (in-package :hunchentoot)
 
-(defclass taskmaster () ((acceptor :accessor taskmaster-acceptor)))
+(defclass taskmaster () ())
 
-(defgeneric execute-acceptor (taskmaster))
+(defgeneric execute-acceptor (taskmaster acceptor))
 
-(defgeneric handle-incoming-connection (taskmaster socket))
+(defgeneric handle-incoming-connection (taskmaster acceptor socket))
 
-(defgeneric shutdown (taskmaster))
+(defgeneric shutdown (taskmaster acceptor))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Simple minded, single-threaded taskmaster implemenetation
 
 (defclass single-threaded-taskmaster (taskmaster) ())
 
-(defmethod execute-acceptor ((taskmaster single-threaded-taskmaster))
-  (accept-connections (taskmaster-acceptor taskmaster)))
+(defmethod execute-acceptor ((taskmaster single-threaded-taskmaster) acceptor)
+  (accept-connections acceptor))
 
-(defmethod handle-incoming-connection ((taskmaster single-threaded-taskmaster) socket)
-  (process-connection (taskmaster-acceptor taskmaster) socket))
+(defmethod handle-incoming-connection ((taskmaster single-threaded-taskmaster) acceptor socket)
+  (process-connection acceptor socket))
 
-(defmethod shutdown ((taskmaster taskmaster)) taskmaster)
+(defmethod shutdown ((taskmaster taskmaster) acceptor) taskmaster)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Thread-per-connection taskmaster implemenetation
@@ -131,7 +131,7 @@ implementations."))
 
 ;; Taskmaster implementation
 
-(defmethod shutdown ((taskmaster thread-per-connection-taskmaster))
+(defmethod shutdown ((taskmaster thread-per-connection-taskmaster) acceptor)
   ;; just wait until the acceptor process has finished, then return
   (loop
    (unless (bt:thread-alive-p (acceptor-process taskmaster))
@@ -139,16 +139,14 @@ implementations."))
    (sleep 1))
   taskmaster)
 
-(defmethod execute-acceptor ((taskmaster thread-per-connection-taskmaster))
+(defmethod execute-acceptor ((taskmaster thread-per-connection-taskmaster) acceptor)
   (setf (acceptor-process taskmaster)
         (bt:make-thread
-         (lambda ()
-           (accept-connections (taskmaster-acceptor taskmaster)))
+         (lambda () (accept-connections acceptor))
          :name (format nil "hunchentoot-listener-~A:~A"
-                       (or (acceptor-address (taskmaster-acceptor taskmaster)) "*")
-                       (acceptor-port (taskmaster-acceptor taskmaster))))))
+                       (or (acceptor-address acceptor) "*") (acceptor-port acceptor)))))
 
-(defmethod handle-incoming-connection ((taskmaster thread-per-connection-taskmaster) socket)
+(defmethod handle-incoming-connection ((taskmaster thread-per-connection-taskmaster) acceptor socket)
   ;; Here's the idea, with the stipulations given in THREAD-PER-CONNECTION-TASKMASTER
   ;;  - If MAX-THREAD-COUNT is null, just start a taskmaster
   ;;  - If the connection count will exceed MAX-ACCEPT-COUNT or if MAX-ACCEPT-COUNT
@@ -159,21 +157,21 @@ implementations."))
   ;;  - Otherwise, increment REQUEST-COUNT and start a taskmaster
   (cond ((null (taskmaster-max-thread-count taskmaster))
          ;; No limit on number of requests, just start a taskmaster
-         (create-request-handler-thread taskmaster socket))
+         (create-request-handler-thread taskmaster acceptor socket))
         ((if (taskmaster-max-accept-count taskmaster)
            (>= (taskmaster-request-count taskmaster) (taskmaster-max-accept-count taskmaster))
            (>= (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster)))
          ;; Send HTTP 503 to indicate that we can't handle the request right now
-         (send-service-unavailable-reply taskmaster socket))
+         (send-service-unavailable-reply acceptor socket))
 
         ((and (taskmaster-max-accept-count taskmaster)
               (>= (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster)))
          ;; Wait for a request to finish, then carry on
          (wait-for-free-connection taskmaster)
-         (create-request-handler-thread taskmaster socket))
+         (create-request-handler-thread taskmaster acceptor socket))
 
         (t
-         (create-request-handler-thread taskmaster socket))))
+         (create-request-handler-thread taskmaster acceptor socket))))
 
 (defun increment-taskmaster-request-count (taskmaster)
   (when (taskmaster-max-thread-count taskmaster)
@@ -198,24 +196,24 @@ implementations."))
     (loop until (< (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster))
           do (condition-variable-wait (taskmaster-wait-queue taskmaster) (taskmaster-wait-lock taskmaster)))))
 
-(defun send-service-unavailable-reply (taskmaster socket)
+(defun send-service-unavailable-reply (acceptor socket)
   "A helper function to send out a quick error reply, before any state
 is set up via PROCESS-REQUEST."
-  (let ((acceptor (taskmaster-acceptor taskmaster)))
-    (acceptor-log-message acceptor :warning "Can't handle a new request, too many request threads already")
+  (acceptor-log-message acceptor :warning 
+                        "Can't handle a new request, too many request threads already")
 
-    ;; FIXME acceptor status message needs (at least in some code
-    ;; paths, a request object. But we're sending this before a
-    ;; request object has been created. So we make a dummy one here.
-    ;; Which'll probably work. But is gross.
-    (let ((request (make-instance 'request :acceptor acceptor :reply (make-instance 'reply :acceptor acceptor))))
-      (send-response 
-       request
-       (make-socket-stream socket acceptor)
-       +http-service-unavailable+
-       :content (acceptor-status-message request +http-service-unavailable+)))))
+  ;; FIXME acceptor status message needs (at least in some code
+  ;; paths, a request object. But we're sending this before a
+  ;; request object has been created. So we make a dummy one here.
+  ;; Which'll probably work but is gross.
+  (let ((request (make-instance 'request :acceptor acceptor :reply (make-instance 'reply :acceptor acceptor))))
+    (send-response 
+     request
+     (make-socket-stream socket acceptor)
+     +http-service-unavailable+
+     :content (acceptor-status-message request +http-service-unavailable+))))
 
-(defun create-request-handler-thread (taskmaster socket)
+(defun create-request-handler-thread (taskmaster acceptor socket)
   "Create a thread for handling a single request"
   ;; we are handling all conditions here as we want to make sure that
   ;; the acceptor process never crashes while trying to create a
@@ -227,15 +225,14 @@ is set up via PROCESS-REQUEST."
     (lambda ()
       (increment-taskmaster-request-count taskmaster)
       (unwind-protect
-           (process-connection (taskmaster-acceptor taskmaster) socket)
+           (process-connection acceptor socket)
         (decrement-taskmaster-request-count taskmaster)))
     :name (format nil (taskmaster-worker-thread-name-format taskmaster) (client-as-string socket)))
    (error (cond)
           ;; need to bind *ACCEPTOR* so that LOG-MESSAGE* can do its work.
-          (let ((acceptor (taskmaster-acceptor taskmaster)))
-            (acceptor-log-message 
-             acceptor *lisp-errors-log-level*
-             "Error while creating worker thread for new incoming connection: ~A" cond)))))
+          (acceptor-log-message 
+           acceptor *lisp-errors-log-level*
+           "Error while creating worker thread for new incoming connection: ~A" cond))))
 
 (defun client-as-string (socket)
   "A helper function which returns the client's address and port as a

@@ -43,38 +43,38 @@
    (script-name :initform nil :reader script-name)
    (query-string :initform nil :reader query-string)
    (aux-data :initform nil :accessor aux-data)
-   (raw-post-data :initform nil)))
+   (raw-post-data :initform nil)
+   (tmp-files :initform () :accessor tmp-files)))
 
 (defun convert-hack (string external-format)
-  "The rfc2388 package is buggy in that it operates on a character
-stream and thus only accepts encodings which are 8 bit transparent.
-In order to support different encodings for parameter values
-submitted, we post process whatever string values the rfc2388 package
-has returned."
+  "The rfc2388 code is buggy in that it operates on a character stream
+and thus only accepts encodings which are 8 bit transparent. In order
+to support different encodings for parameter values submitted, we post
+process whatever string values the rfc2388 package has returned."
   (flex:octets-to-string (map '(vector (unsigned-byte 8) *) 'char-code string)
                          :external-format external-format))
 
-(defun parse-rfc2388-form-data (stream content-type-header external-format)
+(defun parse-rfc2388-form-data (stream content-type-header external-format tmp-filename-generator)
   "Creates an alist of POST parameters from the stream STREAM which is
 supposed to be of content type 'multipart/form-data'."
-  (let* ((parsed-content-type-header (rfc2388:parse-header content-type-header :value))
-	 (boundary (or (cdr (rfc2388:find-parameter
+  (let* ((parsed-content-type-header (parse-header content-type-header :value))
+	 (boundary (or (cdr (find-parameter
                              "BOUNDARY"
-                             (rfc2388:header-parameters parsed-content-type-header)))
+                             (header-parameters parsed-content-type-header)))
 		       (return-from parse-rfc2388-form-data))))
-    (loop for part in (rfc2388:parse-mime stream boundary)
-          for headers = (rfc2388:mime-part-headers part)
-          for content-disposition-header = (rfc2388:find-content-disposition-header headers)
-          for name = (cdr (rfc2388:find-parameter
+    (loop for part in (parse-mime stream boundary tmp-filename-generator)
+          for headers = (mime-part-headers part)
+          for content-disposition-header = (find-content-disposition-header headers)
+          for name = (cdr (find-parameter
                            "NAME"
-                           (rfc2388:header-parameters content-disposition-header)))
+                           (header-parameters content-disposition-header)))
           when name
           collect (cons name
-                        (let ((contents (rfc2388:mime-part-contents part)))
+                        (let ((contents (mime-part-contents part)))
                           (if (pathnamep contents)
                             (list contents
-                                  (rfc2388:get-file-name headers)
-                                  (rfc2388:content-type part :as-string t))
+                                  (get-file-name headers)
+                                  (mime-content-type part :as-string t))
                             (convert-hack contents external-format)))))))
 
 (defun get-post-data (request &key want-stream (already-read 0))
@@ -145,45 +145,44 @@ slot values are computed in this :AFTER method."
         (setf (return-code (reply request)) +http-bad-request+)))))
 
 (defun process-request (request reply)
-  (catch 'request-processed ;; used by HTTP HEAD handling to end
-                            ;; request processing in a HEAD request
-                            ;; (see START-OUTPUT)
-    (let (*tmp-files*)
-      (unwind-protect
-           (with-mapped-conditions ()
-             (labels
-                 ((report-error-to-client (error &optional backtrace)
-                    (when *log-lisp-errors-p*
-                      (acceptor-log-message (acceptor request) *lisp-errors-log-level* "~A~@[~%~A~]" error (when *log-lisp-backtraces-p*
-                                                                                  backtrace)))
-                    (start-output request reply +http-internal-server-error+
-                                  (acceptor-status-message request 
-                                                           +http-internal-server-error+
-                                                           :error (princ-to-string error)
-                                                           :backtrace (princ-to-string backtrace)))))
-               (multiple-value-bind (body error backtrace)
-                   ;; skip dispatch if bad request
-                   (when (eql (return-code reply) +http-ok+)
-                     (catch 'handler-done
-                       (handle-request (acceptor request) request reply)))
-                 (when error
-                   ;; error occured in request handler
-                   (report-error-to-client error backtrace))
-                 (unless (headers-sent-p reply)
-                   (handler-case
-                       (with-debugger
-                         (start-output request reply (return-code reply)
-                                       (or (acceptor-status-message request (return-code reply))
-                                           body)))
-                     (error (e)
-                       ;; error occured while writing to the client.  attempt to report.
-                       (report-error-to-client e)))))))
-        (dolist (path *tmp-files*)
-          (when (and (pathnamep path) (probe-file path))
-            ;; the handler may have chosen to (re)move the uploaded
-            ;; file, so ignore errors that happen during deletion
-            (ignore-errors*
-              (delete-file path))))))))
+  ;; used by HTTP HEAD handling to end request processing in a HEAD
+  ;; request (see START-OUTPUT)
+  (catch 'request-processed
+    (unwind-protect
+         (with-mapped-conditions ()
+           (labels
+               ((report-error-to-client (error &optional backtrace)
+                  (when *log-lisp-errors-p*
+                    (acceptor-log-message (acceptor request) *lisp-errors-log-level* "~A~@[~%~A~]" error (when *log-lisp-backtraces-p*
+                                                                                                           backtrace)))
+                  (start-output request reply +http-internal-server-error+
+                                (acceptor-status-message request 
+                                                         +http-internal-server-error+
+                                                         :error (princ-to-string error)
+                                                         :backtrace (princ-to-string backtrace)))))
+             (multiple-value-bind (body error backtrace)
+                 ;; skip dispatch if bad request
+                 (when (eql (return-code reply) +http-ok+)
+                   (catch 'handler-done
+                     (handle-request (acceptor request) request reply)))
+               (when error
+                 ;; error occured in request handler
+                 (report-error-to-client error backtrace))
+               (unless (headers-sent-p reply)
+                 (handler-case
+                     (with-debugger
+                       (start-output request reply (return-code reply)
+                                     (or (acceptor-status-message request (return-code reply))
+                                         body)))
+                   (error (e)
+                     ;; error occured while writing to the client.  attempt to report.
+                     (report-error-to-client e)))))))
+      (dolist (path (tmp-files request))
+        (when (and (pathnamep path) (probe-file path))
+          ;; the handler may have chosen to (re)move the uploaded
+          ;; file, so ignore errors that happen during deletion
+          (ignore-errors*
+            (delete-file path)))))))
 
 (defun parse-multipart-form-data (request external-format)
   "Parse the REQUEST body as multipart/form-data, assuming that its
@@ -192,7 +191,11 @@ alist or NIL if there was no data or the data could not be parsed."
   (handler-case*
       (let ((content-stream (make-flexi-stream (content-stream request) :external-format +latin-1+)))
         (prog1
-            (parse-rfc2388-form-data content-stream (header-in :content-type request) external-format)
+            (parse-rfc2388-form-data
+             content-stream
+             (header-in :content-type request)
+             external-format
+             (make-tmp-filename-generator request))
           (let ((stray-data (get-post-data request :already-read (flexi-stream-position content-stream))))
             (when (and stray-data (plusp (length stray-data)))
               (hunchentoot-warn "~A octets of stray data after form-data sent by client."

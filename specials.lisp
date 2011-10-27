@@ -179,8 +179,8 @@ the debugger).")
   #-(or :win32 :mswindows) "/tmp/hunchentoot/"
   "Directory for temporary files created by MAKE-TMP-FILE-NAME.")
 
-(defvar *tmp-files* nil
-  "A list of temporary files created while a request was handled.")
+(defvar *tmp-counter* 0
+  "Counter used in creating tmp filenames.")
 
 (defconstant +latin-1+
   (make-external-format :latin1 :eol-style :lf)

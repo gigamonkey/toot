@@ -127,26 +127,21 @@ according to HTTP/1.1 \(RFC 2068)."
     (format nil "~4,'0d-~2,'0d-~2,'0d ~2,'0d:~2,'0d:~2,'0d"
             year month date hour minute second)))
 
-(let ((counter 0))
-  (declare (ignorable counter))
-  (defun make-tmp-file-name (&optional (prefix "hunchentoot"))
-    "Generates a unique name for a temporary file.  This function is
-called from the RFC2388 library when a file is uploaded."
-    (let ((tmp-file-name
-           #+:allegro
-           (pathname (system:make-temp-file-name prefix *tmp-directory*))
-           #-:allegro
-           (loop for pathname = (make-pathname :name (format nil "~A-~A"
-                                                             prefix (incf counter))
-                                               :type nil
-                                               :defaults *tmp-directory*)
-                 unless (probe-file pathname)
-                 return pathname)))
-      (push tmp-file-name *tmp-files*)
+(defun make-tmp-filename-generator (request)
+  (lambda ()
+    (let ((tmp-filename
+           #+:allegro (pathname (system:make-temp-file-name prefix *tmp-directory*))
+           #-:allegro 
+           (loop for pathname = (make-pathname 
+                                 :name (format nil "hunchentoot-~A" (incf *tmp-counter*))
+                                 :type nil
+                                 :defaults *tmp-directory*)
+              unless (probe-file pathname) return pathname)))
+      (push tmp-filename (tmp-files request))
       ;; maybe call hook for file uploads
       (when *file-upload-hook*
-        (funcall *file-upload-hook* tmp-file-name))
-      tmp-file-name)))
+        (funcall *file-upload-hook* tmp-filename))
+      tmp-filename)))
 
 (defun quote-string (string)
   "Quotes string according to RFC 2616's definition of `quoted-string'."

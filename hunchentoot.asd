@@ -48,7 +48,6 @@ for diagnostic output.")
                :flexi-streams
                #-:hunchentoot-no-ssl :cl+ssl
                :md5
-               :rfc2388
                :trivial-backtrace
                :usocket
                :bordeaux-threads)
@@ -60,6 +59,7 @@ for diagnostic output.")
                              (:file "util")
                              (:file "url-rewrite")))
                (:file "packages")
+               (:file "rfc2388")
                (:file "compat")
                (:file "specials")
                (:file "conditions")
