@@ -236,32 +236,6 @@ chunked encoding, but acceptor is configured to not use it.")))))
      (chunked-stream-stream stream))
     (t stream)))
 
-(defun log-access (request &key return-code)
-  (let ((acceptor (acceptor request))
-        (reply (reply request)))
-    (with-log-stream (stream (acceptor-access-log-destination acceptor) *access-log-lock*)
-      (format stream "~:[-~@[ (~A)~]~;~:*~A~@[ (~A)~]~] ~:[-~;~:*~A~] [~A] \"~A ~A~@[?~A~] ~
-                    ~A\" ~D ~:[-~;~:*~D~] \"~:[-~;~:*~A~]\" \"~:[-~;~:*~A~]\"~%"
-              (remote-addr request)
-              (header-in :x-forwarded-for request)
-              (authorization request)
-              (iso-time)
-              (request-method request)
-              (script-name request)
-              (query-string request)
-              (server-protocol request)
-              return-code
-              (content-length reply)
-              (referer request)
-              (user-agent request)))))
-
-(defun log-message (acceptor log-level format-string &rest format-arguments)
-  (with-log-stream (stream (acceptor-message-log-destination acceptor) *message-log-lock*)
-    (format stream "[~A~@[ [~A]~]] ~?~%"
-            (iso-time) log-level
-            format-string format-arguments)))
-
-
 (defun accept-connections (acceptor)
   "Called by taskmaster's execute-acceptor."
   (usocket:with-server-socket (listener (acceptor-listen-socket acceptor))
