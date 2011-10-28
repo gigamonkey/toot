@@ -253,19 +253,23 @@ chunked encoding, but acceptor is configured to not use it.")))))
            (handle-incoming-connection (taskmaster acceptor) acceptor client-connection))))))
 
 (defun handle-request (acceptor request reply)
-  (handler-bind 
-      ((error
-        (lambda (cond)
-          ;; if the headers were already sent, the error happened
-          ;; within the body and we have to close the stream
-          (when (headers-sent-p reply) (setf (close-stream-p reply) t))
-          (throw 'handler-done (values nil cond (get-backtrace)))))
-       (warning
-        (lambda (cond)
-          (when *log-lisp-warnings-p*
-            (log-message acceptor *lisp-warnings-log-level* "~A" cond)))))
-    (with-debugger
-      (dispatch (dispatcher acceptor) request reply))))
+  ;; If the handler we dispatch to throws handler-done, we will return
+  ;; the values thrown. Otherwise we return no values.
+  (catch 'handler-done
+    (handler-bind 
+        ((error
+          (lambda (cond)
+            ;; if the headers were already sent, the error happened
+            ;; within the body and we have to close the stream
+            (when (headers-sent-p reply) (setf (close-stream-p reply) t))
+            (throw 'handler-done (values nil cond (get-backtrace)))))
+         (warning
+          (lambda (cond)
+            (when *log-lisp-warnings-p*
+              (log-message acceptor *lisp-warnings-log-level* "~A" cond)))))
+      (with-debugger
+        (dispatch (dispatcher acceptor) request reply))
+      (values))))
 
 (defun acceptor-status-message (request http-status-code &rest properties &key &allow-other-keys)
   "This function is called after the request's handler has been
@@ -321,10 +325,16 @@ chunked encoding, but acceptor is configured to not use it.")))))
                      (when file
                        (setf (content-type reply) "text/html")
                        (substitute-request-context-variables (file-contents file))))))))
-          (or (unless (< 300 http-status-code)
-                (apply 'make-cooked-message request reply http-status-code properties)) ; don't ever try template for positive return codes
-              (error-contents-from-template) ; try template
-              (apply 'make-cooked-message request reply http-status-code properties))) ; fall back to cooked message
+          (or
+           ;; on error status codes make a cooked message, if m-c-m knows how.
+           (when (>= 300 http-status-code)
+             (apply 'make-cooked-message request reply http-status-code properties))
+           ;; if not (i.e. non error status codes or m-c-m doesn't have anything) look for a template
+           (error-contents-from-template)
+           ;; no template, then try make-cooked-message in case it
+           ;; knows how to handle a status code < 300. (Which it
+           ;; doesn't so this is silly.)
+           (apply 'make-cooked-message request reply http-status-code properties)))
       (error (e)
         (log-message acceptor :error "error ~A during error processing, sending cooked message to client" e)
         (apply 'make-cooked-message request reply http-status-code properties)))))

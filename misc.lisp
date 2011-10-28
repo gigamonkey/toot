@@ -46,11 +46,12 @@ matches the CL-PPCRE regular expression REGEX."
       (and (scan scanner (script-name request))
            handler))))
 
-(defun abort-request-handler (&optional result)
+(defun abort-request-handler (request response-status-code)
   "This function can be called by a request handler at any time to
 immediately abort handling the request.  This works as if the handler
 had returned RESULT.  See the source code of REDIRECT for an example."
-  (throw 'handler-done result))
+  (setf (return-code (reply request)) response-status-code)
+  (throw 'handler-done nil))
 
 (defun maybe-handle-range-header (request reply file)
   "Helper function for handle-static-file.  Determines whether the
@@ -86,9 +87,8 @@ via the file's suffix."
   (when (or (wild-pathname-p pathname)
             (not (fad:file-exists-p pathname))
             (fad:directory-exists-p pathname))
-    ;; file does not exist
-    (setf (return-code reply) +http-not-found+)
-    (abort-request-handler))
+    (abort-request-handler request +http-not-found+))
+
   (let ((time (or (file-write-date pathname)
                   (get-universal-time)))
         bytes-to-send)
@@ -102,16 +102,17 @@ via the file's suffix."
                           :direction :input
                           :element-type 'octet
                           :if-does-not-exist nil)
-      (setf bytes-to-send (maybe-handle-range-header request reply file)
-            (content-length reply) bytes-to-send)
-      (let ((out (send-headers request reply))
+      (setf bytes-to-send (maybe-handle-range-header request reply file))
+      (setf (content-length reply) bytes-to-send)
+
+      (let ((out (send-headers request))
             (buf (make-array +buffer-length+ :element-type 'octet)))
         #+:clisp
         (setf (flexi-stream-element-type (content-stream (acceptor request))) 'octet)
         (loop
            (when (zerop bytes-to-send)
              (return))
-           (let* ((chunk-size (min +buffer-length+ bytes-to-send)))
+           (let ((chunk-size (min +buffer-length+ bytes-to-send)))
              (unless (eql chunk-size (read-sequence buf file :end chunk-size))
                (error "can't read from input file"))
              (write-sequence buf out :end chunk-size)
@@ -164,8 +165,7 @@ it'll be the content type used for all files in the folder."
                               (eq (first script-path-directory) :relative)
                               (loop for component in (rest script-path-directory)
                                     always (stringp component))))
-               (setf (return-code reply) +http-forbidden+)
-               (abort-request-handler))
+               (abort-request-handler request +http-forbidden+))
              (handle-static-file reply (merge-pathnames script-path base-path) content-type))))
     (create-prefix-dispatcher uri-prefix #'handler)))
 
@@ -199,9 +199,8 @@ If CODE is a 3xx redirection code, it will be sent as status code."
                          (first (ppcre:split ":" (or host "")))
                          host)
                        port target))))
-    (setf (header-out :location reply) url
-          (return-code reply) code)
-    (abort-request-handler)))
+    (setf (header-out :location reply) url)
+    (abort-request-handler request code)))
 
 (defun starts-with-scheme-p (string)
   "Checks whether the string STRING represents a URL which starts with
@@ -215,9 +214,9 @@ a scheme, i.e. something like 'https://' or 'mailto:'."
         else return (and scheme-char-seen-p
                          (char= c #\:))))
 
-(defun require-authorization (reply &optional (realm "Toot"))
+(defun require-authorization (request &optional (realm "Toot"))
   "Sends back appropriate headers to require basic HTTP authentication
 \(see RFC 2617) for the realm REALM."
-  (setf (header-out :www-authenticate reply) (format nil "Basic realm=\"~A\"" (quote-string realm))
-        (return-code reply) +http-authorization-required+)
-  (abort-request-handler))
+  (setf (header-out :www-authenticate (reply request))
+        (format nil "Basic realm=\"~A\"" (quote-string realm)))
+  (abort-request-handler request +http-authorization-required+))

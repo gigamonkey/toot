@@ -52,8 +52,10 @@
       (format nil "~A; charset=~(~A~)" content-type (flex:external-format-name external-format))
       content-type))
 
-(defun start-output (request reply return-code &optional (content nil content-provided-p))
-  (let* ((acceptor (acceptor request))
+(defun start-output (request &optional (content nil content-provided-p))
+  (let* ((reply (reply request))
+         (return-code (return-code reply))
+         (acceptor (acceptor request))
          (chunkedp (and (acceptor-output-chunking-p acceptor)
                         (eq (server-protocol request) :http/1.1)
                         ;; only turn chunking on if the content
@@ -77,38 +79,42 @@
       ;; now set headers for keep-alive and chunking
       (when chunkedp
         (setf (header-out :transfer-encoding reply) "chunked"))
-      (cond (keep-alive-p
-             (setf (close-stream-p reply) nil)
-             (when (and (acceptor-read-timeout acceptor)
-                        (or (not (eq (server-protocol request) :http/1.1))
-                            keep-alive-requested-p))
-               ;; persistent connections are implicitly assumed for
-               ;; HTTP/1.1, but we return a 'Keep-Alive' header if the
-               ;; client has explicitly asked for one
-               (setf (header-out :connection reply) "Keep-Alive"
-                     (header-out :keep-alive reply)
-                     (format nil "timeout=~D" (acceptor-read-timeout acceptor)))))
-            (t (setf (header-out :connection reply) "Close"))))
-    (unless (and (header-out-set-p :server reply)
+
+      (cond 
+        (keep-alive-p
+         (setf (close-stream-p reply) nil)
+         (when (and (acceptor-read-timeout acceptor)
+                    (or (not (eq (server-protocol request) :http/1.1))
+                        keep-alive-requested-p))
+           ;; persistent connections are implicitly assumed for
+           ;; HTTP/1.1, but we return a 'Keep-Alive' header if the
+           ;; client has explicitly asked for one
+           (setf (header-out :connection reply) "Keep-Alive")
+           (setf (header-out :keep-alive reply) (format nil "timeout=~D" (acceptor-read-timeout acceptor)))))
+        (t (setf (header-out :connection reply) "Close"))))
+
+    (unless (and (header-out-set-p :server reply) 
                  (null (header-out :server reply)))
       (setf (header-out :server reply) (or (header-out :server reply)
-                                     (acceptor-server-name acceptor))))
+                                           (acceptor-server-name acceptor))))
+
     (setf (header-out :date reply) (rfc-1123-date))
 
     (when (stringp content)
       ;; if the content is a string, convert it to the proper external format
-      (setf content (string-to-octets content :external-format (reply-external-format reply))
-            (content-type reply) (maybe-add-charset-to-content-type-header 
+      (setf content (string-to-octets content :external-format (reply-external-format reply)))
+      (setf (content-type reply) (maybe-add-charset-to-content-type-header 
                                   (content-type reply)
                                   (reply-external-format reply))))
     (when content
       ;; whenever we know what we're going to send out as content, set
       ;; the Content-Length header properly; maybe the user specified
-      ;; a different content length, but that will wrong anyway
+      ;; a different content length, but that will be wrong anyway
       (setf (header-out :content-length reply) (length content)))
+
     ;; send headers only once
-    (when (headers-sent-p reply)
-      (return-from start-output))
+    (when (headers-sent-p reply) (return-from start-output))
+
     (setf (headers-sent-p reply) t)
     (send-response 
      request
@@ -117,9 +123,10 @@
      :headers (headers-out reply)
      :cookies (cookies-out reply)
      :content (unless head-request-p content))
+
     ;; when processing a HEAD request, exit to return from PROCESS-REQUEST
-    (when head-request-p
-      (throw 'request-processed nil))
+    (when head-request-p (throw 'request-processed nil))
+
     (when chunkedp
       ;; turn chunking on after the headers have been sent
       (unless (typep (content-stream request) 'chunked-stream)
@@ -159,8 +166,7 @@
       (finish-output stream))
     stream))
 
-(defun send-headers (request reply)
-  (start-output request reply (return-code reply)))
+(defun send-headers (request) (start-output request))
 
 (defun read-initial-request-line (stream)
   (handler-case

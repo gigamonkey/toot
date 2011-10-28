@@ -144,45 +144,79 @@ slot values are computed in this :AFTER method."
         ;; we assume it's not our fault...
         (setf (return-code (reply request)) +http-bad-request+)))))
 
+#+(or)(defun process-request (request reply)
+  ;; used by HTTP HEAD handling to end request processing in a HEAD
+  ;; request (see START-OUTPUT)
+  (catch 'request-processed
+    (unwind-protect
+         ;; FIXME: I think this with-mapped-conditions can be removed
+         ;; because process-request is only called from one place
+         ;; which is already in a w-m-c.
+         (with-mapped-conditions ()
+           (multiple-value-bind (body error backtrace)
+               ;; skip dispatch if bad request
+               ;; FIXME: I'm confused, when did the return-code possibly
+               ;; get set to anything else.
+               (when (eql (return-code reply) +http-ok+)
+                 (catch 'handler-done
+                   (handle-request (acceptor request) request reply)))
+
+             (when error
+               (report-error-to-client request error backtrace))
+             
+             (unless (headers-sent-p reply)
+               (handler-case
+                   (with-debugger
+                     (start-output request
+                                   (or (acceptor-status-message request (return-code reply))
+                                       body)))
+                 (error (e)
+                   ;; error occured while writing to the client. attempt to report.
+                   (report-error-to-client request e))))))
+
+      (delete-tmp-files request))))
+
 (defun process-request (request reply)
   ;; used by HTTP HEAD handling to end request processing in a HEAD
   ;; request (see START-OUTPUT)
   (catch 'request-processed
     (unwind-protect
-         (with-mapped-conditions ()
-           (labels
-               ((report-error-to-client (error &optional backtrace)
-                  (when *log-lisp-errors-p*
-                    (log-message (acceptor request) *lisp-errors-log-level* "~A~@[~%~A~]" error (when *log-lisp-backtraces-p*
-                                                                                                           backtrace)))
-                  (start-output request reply +http-internal-server-error+
-                                (acceptor-status-message request 
-                                                         +http-internal-server-error+
-                                                         :error (princ-to-string error)
-                                                         :backtrace (princ-to-string backtrace)))))
-             (multiple-value-bind (body error backtrace)
-                 ;; skip dispatch if bad request
-                 (when (eql (return-code reply) +http-ok+)
-                   (catch 'handler-done
-                     (handle-request (acceptor request) request reply)))
-               (when error
-                 ;; error occured in request handler
-                 (report-error-to-client error backtrace))
-               (unless (headers-sent-p reply)
-                 (handler-case
-                     (with-debugger
-                       (start-output request reply (return-code reply)
-                                     (or (acceptor-status-message request (return-code reply))
-                                         body)))
-                   (error (e)
-                     ;; error occured while writing to the client.  attempt to report.
-                     (report-error-to-client e)))))))
-      (dolist (path (tmp-files request))
-        (when (and (pathnamep path) (probe-file path))
-          ;; the handler may have chosen to (re)move the uploaded
-          ;; file, so ignore errors that happen during deletion
-          (ignore-errors*
-            (delete-file path)))))))
+         (multiple-value-bind (body error backtrace) (handle-request (acceptor request) request reply)
+
+           (when error (report-error-to-client request error backtrace))
+           
+           (unless (headers-sent-p reply)
+             (handler-case
+                 (with-debugger
+                   (start-output request
+                                 (or (acceptor-status-message request (return-code reply)) body)))
+               (error (e)
+                 ;; error occured while writing to the client. attempt to report.
+                 (report-error-to-client request e)))))
+      (delete-tmp-files request))))
+
+(defun report-error-to-client (request error &optional backtrace)
+  (when *log-lisp-errors-p*
+    (log-message 
+     (acceptor request) 
+     *lisp-errors-log-level*
+     "~A~@[~%~A~]"
+     error
+     (when *log-lisp-backtraces-p* backtrace)))
+  (setf (return-code (reply request)) +http-internal-server-error+)
+  (start-output request
+                (acceptor-status-message 
+                 request 
+                 +http-internal-server-error+
+                 :error (princ-to-string error)
+                 :backtrace (princ-to-string backtrace))))
+
+(defun delete-tmp-files (request)
+  (dolist (path (tmp-files request))
+    (when (and (pathnamep path) (probe-file path))
+      ;; the handler may have chosen to (re)move the uploaded
+      ;; file, so ignore errors that happen during deletion
+      (ignore-errors* (delete-file path)))))
 
 (defun parse-multipart-form-data (request external-format)
   "Parse the REQUEST body as multipart/form-data, assuming that its
@@ -252,9 +286,8 @@ unknown character set ~A in request content type."
         ;; this is not the right thing to do because it could happen
         ;; that we aren't finished reading from the request stream and
         ;; can't send a reply - to be revisited
-        (setf (return-code (reply request)) +http-bad-request+
-              (close-stream-p (reply request)) t)
-        (abort-request-handler)))))
+        (setf (close-stream-p (reply request)) t)
+        (abort-request-handler request +http-bad-request+)))))
 
 (defun recompute-request-parameters (request &key (external-format *toot-default-external-format*))
   "Recomputes the GET and POST parameters for the REQUEST object
@@ -346,8 +379,7 @@ TIME."
     ;; simple string comparison is sufficient; see RFC 2616 14.25
     (when (and if-modified-since
                (equal if-modified-since time-string))
-      (setf (return-code (reply request)) +http-not-modified+)
-      (abort-request-handler))
+      (abort-request-handler request +http-not-modified+))
     (values)))
 
 (defun external-format-from-content-type (content-type)

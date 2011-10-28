@@ -27,7 +27,7 @@
 (in-package :toot)
 
 (defgeneric dispatch (dispatcher request reply)
-  (:documentation "An object that can be used by an acceptor to Dispatch a request."))
+  (:documentation "An object that can be used by an acceptor to dispatch a request."))
 
 (defmethod dispatch ((dispatcher function) request reply)
   (funcall dispatcher request reply))
@@ -40,9 +40,7 @@
   (lambda (request reply)
     (let ((script-name (script-name request)))
       (unless (safe-filename-p script-name)
-        (setf (return-code reply) +http-forbidden+)
-        (abort-request-handler))
-      
+        (abort-request-handler request +http-forbidden+))
       (handle-static-file request reply (resolve-file script-name document-root)))))
 
 (defun safe-filename-p (script-name)

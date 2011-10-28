@@ -141,7 +141,6 @@
            #:get-parameters
            #:get-parameters*
            #:handle-if-modified-since
-           #:handle-request
            #:handle-static-file
            #:header-in
            #:header-in*

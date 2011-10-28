@@ -32,7 +32,7 @@ easy way for a response generator to specify that it wants a bivalent
 stream. Or maybe setting an external format on the reply should cause
 it to happen.
 
-Mime type data should be moved out of code.
+Mime-type data should be moved out of code.
 
 Perhaps the reply and request objects should be passed in to handler
 functions rather than as special variables.
@@ -58,7 +58,20 @@ If you connect to an SSL acceptor with HTTP it hangs. Seems like something else 
 
 * Things a user may want to configure or customize.
 
-Error pages
+** Dispatching
+
+Acceptor reads an HTTP request and populates the request/reply object.
+Then what code runs is up to a higher level dispatcher. We may want to
+provide some simple ones.
+
+** Error pages
+
+When a request is handled, it may abort the handling of the request
+with an HTTP status code indicating an error. The handlers should not
+have to worry about generating an appropriate error page. There should
+be a default error handler that generates Toot-branded error pages and
+there should be an easy way to provide your own code to generate error
+pages.
 
 Logging (where to and what format)
 
@@ -74,3 +87,10 @@ Logging (where to and what format)
 [acceptor] handle-request -> 
 dispatch to user code.
 
+* Response generation
+
+process-request calls start-output to send an http-internal-server-error
+
+send-headers calls start-output with no content
+
+start-output calls send-response
