@@ -91,6 +91,7 @@
            ;; client has explicitly asked for one
            (setf (header-out :connection reply) "Keep-Alive")
            (setf (header-out :keep-alive reply) (format nil "timeout=~D" (acceptor-read-timeout acceptor)))))
+
         (t (setf (header-out :connection reply) "Close"))))
 
     (unless (and (header-out-set-p :server reply) 

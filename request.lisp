@@ -144,47 +144,22 @@ slot values are computed in this :AFTER method."
         ;; we assume it's not our fault...
         (setf (return-code (reply request)) +http-bad-request+)))))
 
-#+(or)(defun process-request (request reply)
-  ;; used by HTTP HEAD handling to end request processing in a HEAD
-  ;; request (see START-OUTPUT)
-  (catch 'request-processed
-    (unwind-protect
-         ;; FIXME: I think this with-mapped-conditions can be removed
-         ;; because process-request is only called from one place
-         ;; which is already in a w-m-c.
-         (with-mapped-conditions ()
-           (multiple-value-bind (body error backtrace)
-               ;; skip dispatch if bad request
-               ;; FIXME: I'm confused, when did the return-code possibly
-               ;; get set to anything else.
-               (when (eql (return-code reply) +http-ok+)
-                 (catch 'handler-done
-                   (handle-request (acceptor request) request reply)))
-
-             (when error
-               (report-error-to-client request error backtrace))
-             
-             (unless (headers-sent-p reply)
-               (handler-case
-                   (with-debugger
-                     (start-output request
-                                   (or (acceptor-status-message request (return-code reply))
-                                       body)))
-                 (error (e)
-                   ;; error occured while writing to the client. attempt to report.
-                   (report-error-to-client request e))))))
-
-      (delete-tmp-files request))))
-
 (defun process-request (request reply)
   ;; used by HTTP HEAD handling to end request processing in a HEAD
   ;; request (see START-OUTPUT)
   (catch 'request-processed
     (unwind-protect
-         (multiple-value-bind (body error backtrace) (handle-request (acceptor request) request reply)
+         (multiple-value-bind (body error backtrace) 
+             (handle-request (acceptor request) request reply)
 
            (when error (report-error-to-client request error backtrace))
-           
+
+           ;; Headers may have been sent if the handler called
+           ;; SEND-HEADERS and then wrote response directly to the
+           ;; stream. In that case there is nothing left to do but
+           ;; clean up. Otherwise, if the return-code is one that
+           ;; needs an error message we generate that or we return
+           ;; value returned by the handler as the body of the reply.
            (unless (headers-sent-p reply)
              (handler-case
                  (with-debugger
@@ -193,6 +168,7 @@ slot values are computed in this :AFTER method."
                (error (e)
                  ;; error occured while writing to the client. attempt to report.
                  (report-error-to-client request e)))))
+
       (delete-tmp-files request))))
 
 (defun report-error-to-client (request error &optional backtrace)

@@ -30,7 +30,10 @@ Acceptor should not have a document root.
 My send-headers-and-wrap stream should be built in—there should be an
 easy way for a response generator to specify that it wants a bivalent
 stream. Or maybe setting an external format on the reply should cause
-it to happen.
+it to happen. (Hmmm, perhaps the right place is for SEND-HEADERS to
+take an argument saying what kind of stream it wants. The default
+could be a bivalent stream and you could specify :binary t to save the
+cost of creating the flexistream.)
 
 Mime-type data should be moved out of code.
 

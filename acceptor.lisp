@@ -254,7 +254,10 @@ chunked encoding, but acceptor is configured to not use it.")))))
 
 (defun handle-request (acceptor request reply)
   ;; If the handler we dispatch to throws handler-done, we will return
-  ;; the values thrown. Otherwise we return no values.
+  ;; the values thrown. Otherwise we return whatever values the
+  ;; handler returns. If the handler returns a value (and it has not
+  ;; called send-headers) the value should be a string which will be
+  ;; encoded and sent as the body of the reply.
   (catch 'handler-done
     (handler-bind 
         ((error
@@ -268,8 +271,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
             (when *log-lisp-warnings-p*
               (log-message acceptor *lisp-warnings-log-level* "~A" cond)))))
       (with-debugger
-        (dispatch (dispatcher acceptor) request reply))
-      (values))))
+        (dispatch (dispatcher acceptor) request reply)))))
 
 (defun acceptor-status-message (request http-status-code &rest properties &key &allow-other-keys)
   "This function is called after the request's handler has been
