@@ -49,8 +49,8 @@
    (access-log-destination :initarg :access-log-destination :accessor acceptor-access-log-destination)
    (message-log-destination :initarg :message-log-destination :accessor acceptor-message-log-destination)
    (error-template-directory :initarg :error-template-directory :accessor acceptor-error-template-directory)
-   (document-root :initarg :document-root :accessor acceptor-document-root)
-   (ssl-adapter :initarg :ssl-adapter :accessor ssl-adapter))
+   (ssl-adapter :initarg :ssl-adapter :accessor ssl-adapter)
+   (dispatcher :initarg :dispatcher :accessor dispatcher))
 
   (:default-initargs
     :address nil
@@ -65,9 +65,9 @@
     :write-timeout *default-connection-timeout*
     :access-log-destination *error-output*
     :message-log-destination *error-output*
-    :document-root (load-time-value (default-document-directory))
     :ssl-adapter nil
-    :error-template-directory (load-time-value (default-document-directory "errors/"))))
+    :error-template-directory (load-time-value (default-document-directory "errors/"))
+    :dispatcher (make-static-file-dispatcher (load-time-value (default-document-directory)))))
 
 (defmethod print-object ((acceptor acceptor) stream)
   (print-unreadable-object (acceptor stream :type t)
@@ -264,18 +264,8 @@ chunked encoding, but acceptor is configured to not use it.")))))
         (lambda (cond)
           (when *log-lisp-warnings-p*
             (log-message acceptor *lisp-warnings-log-level* "~A" cond)))))
-    (let ((dispatcher (make-static-file-dispatcher (acceptor-document-root acceptor))))
-      (with-debugger
-        (funcall dispatcher request reply)))))
-
-(defun make-static-file-dispatcher (document-root)
-  (lambda (request reply)
-    (handle-static-file
-     request reply 
-     (merge-pathnames (if (equal (script-name request) "/")
-                          "index.html"
-                          (subseq (script-name request) 1))
-                      document-root))))
+    (with-debugger
+      (dispatch (dispatcher acceptor) request reply))))
 
 (defun acceptor-status-message (request http-status-code &rest properties &key &allow-other-keys)
   "This function is called after the request's handler has been
