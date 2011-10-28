@@ -97,3 +97,15 @@ process-request calls start-output to send an http-internal-server-error
 send-headers calls start-output with no content
 
 start-output calls send-response
+
+* Random ideas
+
+Instead of a handler just being able to return a string, perhaps it
+can return any object for which there are methods defined that can
+figure out how to render it and what the size of the rendering will
+be.
+
+  (defgeneric render-body (object stream))
+
+  (defmethod render-body ((object string) stream)
+    (write-string object stream))

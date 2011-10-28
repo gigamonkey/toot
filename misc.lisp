@@ -46,13 +46,6 @@ matches the CL-PPCRE regular expression REGEX."
       (and (scan scanner (script-name request))
            handler))))
 
-(defun abort-request-handler (request response-status-code)
-  "This function can be called by a request handler at any time to
-immediately abort handling the request.  This works as if the handler
-had returned RESULT.  See the source code of REDIRECT for an example."
-  (setf (return-code (reply request)) response-status-code)
-  (throw 'handler-done nil))
-
 (defun maybe-handle-range-header (request reply file)
   "Helper function for handle-static-file.  Determines whether the
   requests specifies a Range header.  If so, parses the header and
@@ -68,11 +61,12 @@ had returned RESULT.  See the source code of REDIRECT for an example."
             end (parse-integer end))
       (when (or (< start 0)
                 (>= end (file-length file)))
-        (setf (return-code reply) +http-requested-range-not-satisfiable+
-              (header-out :content-range reply) (format nil "bytes 0-~D/*" (1- (file-length file))))
-        (throw 'handler-done
-          (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
-                  start end (1- (file-length file)))))
+        (setf (header-out :content-range reply) (format nil "bytes 0-~D/*" (1- (file-length file))))
+        (abort-request-handler
+         request
+         +http-requested-range-not-satisfiable+
+         (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
+                 start end (1- (file-length file)))))
       (file-position file start)
       (setf (return-code reply) +http-partial-content+
             bytes-to-send (1+ (- end start))

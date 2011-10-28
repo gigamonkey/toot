@@ -273,6 +273,13 @@ chunked encoding, but acceptor is configured to not use it.")))))
       (with-debugger
         (dispatch (dispatcher acceptor) request reply)))))
 
+(defun abort-request-handler (request response-status-code &optional body)
+  "Abort the handling of a request, sending instead a response with
+the given response-status-code. A request can only be aborted if
+SEND-HEADERS has not been called."
+  (setf (return-code (reply request)) response-status-code)
+  (throw 'handler-done body))
+
 (defun acceptor-status-message (request http-status-code &rest properties &key &allow-other-keys)
   "This function is called after the request's handler has been
    invoked to convert the HTTP-STATUS-CODE to a HTML message to be

@@ -154,12 +154,12 @@ slot values are computed in this :AFTER method."
 
            (when error (report-error-to-client request error backtrace))
 
-           ;; Headers may have been sent if the handler called
+           ;; Headers will have been sent if the handler called
            ;; SEND-HEADERS and then wrote response directly to the
            ;; stream. In that case there is nothing left to do but
            ;; clean up. Otherwise, if the return-code is one that
-           ;; needs an error message we generate that or we return
-           ;; value returned by the handler as the body of the reply.
+           ;; needs an error message we generate that or we return the
+           ;; string returned by the handler as the body of the reply.
            (unless (headers-sent-p reply)
              (handler-case
                  (with-debugger
