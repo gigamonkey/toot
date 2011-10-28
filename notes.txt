@@ -65,12 +65,12 @@ Logging (where to and what format)
 
 * Flow
 
-start -> 
-start-listening, execute-acceptor ->
-accept-connections -> 
-handle-incoming-connection -> 
-process-connection -> 
-process-request (in loop) -> 
-handle-request -> 
+[acceptor] start -> 
+[taskmaster] execute-acceptor ->
+[acceptor] accept-connections (in new thread)-> 
+[taskmaster] handle-incoming-connection -> 
+[acceptor] process-connection (in new thread)-> 
+[request] process-request (in loop) -> 
+[acceptor] handle-request -> 
 dispatch to user code.
 

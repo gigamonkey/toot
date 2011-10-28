@@ -100,16 +100,37 @@
 ;;; Start and stop an acceptor
 
 (defun start (acceptor)
-  (setf (acceptor-shutdown-p acceptor) nil)
-  (start-listening acceptor)
-  (execute-acceptor (taskmaster acceptor) acceptor)
-  acceptor)
+  (with-accessors 
+        ((listen-socket acceptor-listen-socket)
+         (shutdown-p acceptor-shutdown-p)
+         (address acceptor-address)
+         (port acceptor-port)
+         (listen-backlog acceptor-listen-backlog))
+      acceptor
+    
+    (when listen-socket
+      (hunchentoot-error "acceptor ~A is already listening" acceptor))
+    
+    (setf shutdown-p nil)
+    (setf listen-socket
+          (usocket:socket-listen
+           (or address usocket:*wildcard-host*) port
+           :reuseaddress t
+           :backlog listen-backlog
+           :element-type '(unsigned-byte 8)))
+
+    (execute-acceptor (taskmaster acceptor) acceptor)
+    acceptor))
 
 (defun stop (acceptor &key soft)
   (setf (acceptor-shutdown-p acceptor) t)
   (shutdown (taskmaster acceptor) acceptor)
   (when soft
     (with-lock-held ((acceptor-shutdown-lock acceptor))
+      ;; FIXME: seems like this should perhaps be a while loop not a
+      ;; when? The thread which called STOP is waiting here while all
+      ;; the threads processing requests will signal on the
+      ;; acceptor-shutdown-queue
       (when (plusp (accessor-requests-in-progress acceptor))
         (condition-variable-wait (acceptor-shutdown-queue acceptor) 
                                  (acceptor-shutdown-lock acceptor)))))
@@ -158,7 +179,7 @@
              ;; process requests until either the acceptor is shut
              ;; down, close-stream-p on the reply is T, or the peer
              ;; fails to send a request
-             (loop
+             (loop 
                 (when (acceptor-shutdown-p acceptor) (return))
                 
                 (multiple-value-bind (headers-in method url-string protocol)
@@ -169,15 +190,14 @@
                         (transfer-encodings (cdr (assoc* :transfer-encoding headers-in))))
 
                     (when transfer-encodings
-                      (setf transfer-encodings
-                            (split "\\s*,\\s*" transfer-encodings))
+                      (setf transfer-encodings (split "\\s*,\\s*" transfer-encodings))
 
                       (when (member "chunked" transfer-encodings :test #'equalp)
                         (cond 
                           ((acceptor-input-chunking-p acceptor)
                            ;; turn chunking on before we read the request body
-                           (setf content-stream (make-chunked-stream content-stream)
-                                 (chunked-stream-input-chunking-p content-stream) t))
+                           (setf content-stream (make-chunked-stream content-stream))
+                           (setf (chunked-stream-input-chunking-p content-stream) t))
                           (t (hunchentoot-error "Client tried to use ~
 chunked encoding, but acceptor is configured to not use it.")))))
 
@@ -209,10 +229,10 @@ chunked encoding, but acceptor is configured to not use it.")))))
 (defun unchunked-stream (stream)
   (cond 
     ((typep stream 'chunked-stream)
-     ;; flush the stream first and check if there's unread input
-     ;; which would be an error
-     (setf (chunked-stream-output-chunking-p stream) nil
-           (chunked-stream-input-chunking-p stream) nil)
+     ;; Setting these flushes the output stream and checks if there's
+     ;; unread input which would be an error.
+     (setf (chunked-stream-output-chunking-p stream) nil)
+     (setf (chunked-stream-input-chunking-p stream) nil)
      (chunked-stream-stream stream))
     (t stream)))
 
@@ -241,18 +261,6 @@ chunked encoding, but acceptor is configured to not use it.")))))
             (iso-time) log-level
             format-string format-arguments)))
 
-(defun start-listening (acceptor)
-  (when (acceptor-listen-socket acceptor)
-    (hunchentoot-error "acceptor ~A is already listening" acceptor))
-
-  (setf (acceptor-listen-socket acceptor)
-        (usocket:socket-listen
-         (or (acceptor-address acceptor) usocket:*wildcard-host*)
-         (acceptor-port acceptor)
-         :reuseaddress t
-         :backlog (acceptor-listen-backlog acceptor)
-         :element-type '(unsigned-byte 8)))
-  (values))
 
 (defun accept-connections (acceptor)
   "Called by taskmaster's execute-acceptor."

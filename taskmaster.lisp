@@ -133,8 +133,8 @@ implementations."))
 
 (defmethod execute-acceptor ((taskmaster thread-per-connection-taskmaster) acceptor)
   (setf (acceptor-process taskmaster)
-        (bt:make-thread
-         (lambda () (accept-connections acceptor))
+        (bt:make-thread 
+         (lambda () (accept-connections acceptor)) 
          :name (listen-thread-name acceptor))))
 
 (defmethod handle-incoming-connection ((taskmaster thread-per-connection-taskmaster) acceptor socket)
@@ -149,7 +149,7 @@ implementations."))
   (cond
     ((null (taskmaster-max-thread-count taskmaster))
      ;; No limit on number of requests, just start a taskmaster
-     (create-request-handler-thread taskmaster acceptor socket))
+     (create-connection-handler-thread taskmaster acceptor socket))
     ((if (taskmaster-max-accept-count taskmaster)
          (>= (taskmaster-request-count taskmaster) (taskmaster-max-accept-count taskmaster))
          (>= (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster)))
@@ -160,19 +160,18 @@ implementations."))
           (>= (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster)))
      ;; Wait for a request to finish, then carry on
      (wait-for-free-connection taskmaster)
-     (create-request-handler-thread taskmaster acceptor socket))
+     (create-connection-handler-thread taskmaster acceptor socket))
     
     (t
-     (create-request-handler-thread taskmaster acceptor socket))))
+     (create-connection-handler-thread taskmaster acceptor socket))))
 
 (defmethod shutdown ((taskmaster thread-per-connection-taskmaster) acceptor)
   ;; just wait until the acceptor process has finished, then return
-  (loop
+  (loop  
    (unless (bt:thread-alive-p (acceptor-process taskmaster))
      (return))
    (sleep 1))
   taskmaster)
-
 
 (defun increment-taskmaster-request-count (taskmaster)
   (when (taskmaster-max-thread-count taskmaster)
@@ -214,7 +213,7 @@ is set up via PROCESS-REQUEST."
      +http-service-unavailable+
      :content (acceptor-status-message request +http-service-unavailable+))))
 
-(defun create-request-handler-thread (taskmaster acceptor socket)
+(defun create-connection-handler-thread (taskmaster acceptor socket)
   "Create a thread for handling a single request"
   ;; we are handling all conditions here as we want to make sure that
   ;; the acceptor process never crashes while trying to create a
@@ -228,7 +227,7 @@ is set up via PROCESS-REQUEST."
       (unwind-protect
            (process-connection acceptor socket)
         (decrement-taskmaster-request-count taskmaster)))
-    :name (request-handler-thread-name taskmaster socket))
+    :name (connection-handler-thread-name taskmaster socket))
    (error (cond)
           ;; need to bind *ACCEPTOR* so that LOG-MESSAGE* can do its work.
           (acceptor-log-message 
@@ -239,7 +238,7 @@ is set up via PROCESS-REQUEST."
   (with-accessors ((address acceptor-address) (port acceptor-port)) acceptor
     (format nil "hunchentoot-listener-~A:~A" (or address "*") port)))
 
-(defun request-handler-thread-name (taskmaster socket)
+(defun connection-handler-thread-name (taskmaster socket)
   (let ((address (usocket:get-peer-address socket))
         (port (usocket:get-peer-port socket)))
     (format nil (taskmaster-worker-thread-name-format taskmaster) 

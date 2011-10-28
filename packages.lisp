@@ -204,7 +204,6 @@
            #:single-threaded-taskmaster
            #:ssl-p
            #:start
-           #:start-listening
            #:stop
            #:taskmaster
            #:thread-per-connection-taskmaster
