@@ -99,7 +99,6 @@
            #:acceptor-access-log-destination
            #:acceptor-address
            #:acceptor-dispatch-request
-           #:acceptor-error-template-directory
            #:acceptor-input-chunking-p
            #:acceptor-message-log-destination
            #:acceptor-name

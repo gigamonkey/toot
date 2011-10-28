@@ -32,6 +32,10 @@
 (defmethod dispatch ((dispatcher function) request reply)
   (funcall dispatcher request reply))
 
+(defgeneric generate-error-page (generator request &key error backtrace))
+
+(defmethod generate-error-page ((generator function) request &key error backtrace)
+  (funcall generator request error backtrace))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Static file dispatcher

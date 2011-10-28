@@ -166,7 +166,7 @@ slot values are computed in this :AFTER method."
                    ;;; I've reversed things here: if the handler
                    ;;; supplied a body, we use it. Otherwise, we'll
                    ;;; try and provide a default body
-                   (start-output request (or body (simple-error-message request))))
+                   (start-output request (or body (error-page request))))
                (error (e)
                  ;; error occured while writing to the client. attempt to report.
                  (report-error-to-client request e)))))
@@ -184,7 +184,7 @@ slot values are computed in this :AFTER method."
   (setf (return-code (reply request)) +http-internal-server-error+)
   (start-output 
    request
-   (simple-error-message request :error error :backtrace backtrace)))
+   (error-page request :error error :backtrace backtrace)))
 
 (defun delete-tmp-files (request)
   (dolist (path (tmp-files request))

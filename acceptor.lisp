@@ -30,6 +30,21 @@
   (defun default-document-directory (&optional sub-directory)
     (asdf:system-relative-pathname :toot (format nil "www/~@[~A~]" sub-directory))))
 
+(defun default-error-message-generator (request error backtrace)
+  "Generate a bare-bones error page."
+  (let ((status-code (return-code (reply request))))
+    (with-output-to-string (s)
+      (format s "<html><head><title>~d: ~a</title></head><body><h1>~2:*~d: ~a</h1></body></html>"
+              status-code (reason-phrase status-code))
+      (if (and error *show-lisp-errors-p*)
+          (format s "<pre>~a~@[~%~%Backtrace:~%~%~a~]</pre>"
+                  (escape-for-html (princ-to-string error))
+                  (when (and backtrace *show-lisp-backtraces-p*)
+                    (escape-for-html (princ-to-string backtrace))))))))
+
+ 
+
+
 (defclass acceptor ()
   ((port :initarg :port :reader acceptor-port)
    (address :initarg :address :reader acceptor-address)
@@ -48,9 +63,9 @@
    (shutdown-lock :initform (make-lock "toot-acceptor-shutdown") :accessor acceptor-shutdown-lock)
    (access-log-destination :initarg :access-log-destination :accessor acceptor-access-log-destination)
    (message-log-destination :initarg :message-log-destination :accessor acceptor-message-log-destination)
-   (error-template-directory :initarg :error-template-directory :accessor acceptor-error-template-directory)
    (ssl-adapter :initarg :ssl-adapter :accessor ssl-adapter)
-   (dispatcher :initarg :dispatcher :accessor dispatcher))
+   (dispatcher :initarg :dispatcher :accessor dispatcher)
+   (error-generator :initarg :error-generator :accessor error-generator))
 
   (:default-initargs
     :address nil
@@ -66,8 +81,8 @@
     :access-log-destination *error-output*
     :message-log-destination *error-output*
     :ssl-adapter nil
-    :error-template-directory (load-time-value (default-document-directory "errors/"))
-    :dispatcher (make-static-file-dispatcher (load-time-value (default-document-directory)))))
+    :dispatcher (make-static-file-dispatcher (load-time-value (default-document-directory)))
+    :error-generator #'default-error-message-generator))
 
 (defmethod print-object ((acceptor acceptor) stream)
   (print-unreadable-object (acceptor stream :type t)
@@ -273,24 +288,16 @@ chunked encoding, but acceptor is configured to not use it.")))))
       (with-debugger
         (dispatch (dispatcher acceptor) request reply)))))
 
+(defun error-page (request &key error backtrace)
+  "Generate the body of an error page, using the acceptors error generator."
+  (generate-error-page (error-generator (acceptor request)) request :error error :backtrace backtrace))
+
 (defun abort-request-handler (request response-status-code &optional body)
   "Abort the handling of a request, sending instead a response with
 the given response-status-code. A request can only be aborted if
 SEND-HEADERS has not been called."
   (setf (return-code (reply request)) response-status-code)
   (throw 'handler-done body))
-
-(defun simple-error-message (request &key error backtrace)
-  (let ((status-code (return-code (reply request))))
-    (with-output-to-string (s)
-      (format s "<html><head><title>~d: ~a</title></head><body><h1>~2:*~d: ~a</h1></body></html>"
-              status-code (reason-phrase status-code))
-      (if *show-lisp-errors-p*
-          (format s "<pre>~a~@[~%~%Backtrace:~%~%~a~]</pre>"
-                  (escape-for-html (princ-to-string error))
-                  (when *show-lisp-backtraces-p*
-                    (escape-for-html (princ-to-string backtrace))))))))
- 
 
 (defun acceptor-server-name (acceptor)
   (format nil "Toot ~A (~A)" *toot-version* (acceptor-name acceptor)))
