@@ -148,7 +148,7 @@ implementations."))
   ;;  - Otherwise, increment REQUEST-COUNT and start a taskmaster
   (cond
     ((null (taskmaster-max-thread-count taskmaster))
-     ;; No limit on number of requests, just start a taskmaster
+     ;; No limit on number of requests, just start a thread to handle the connection
      (create-connection-handler-thread taskmaster acceptor socket))
     ((if (taskmaster-max-accept-count taskmaster)
          (>= (taskmaster-request-count taskmaster) (taskmaster-max-accept-count taskmaster))
@@ -199,19 +199,11 @@ implementations."))
 (defun send-service-unavailable-reply (acceptor socket)
   "A helper function to send out a quick error reply, before any state
 is set up via PROCESS-REQUEST."
-  (log-message acceptor :warning 
-                        "Can't handle a new request, too many request threads already")
+  (log-message acceptor :warning "Can't handle a new request, too many request threads already")
+  (quick-send-response 
+   (make-socket-stream socket acceptor)
+   +http-service-unavailable+))
 
-  ;; FIXME acceptor status message needs (at least in some code
-  ;; paths, a request object. But we're sending this before a
-  ;; request object has been created. So we make a dummy one here.
-  ;; Which'll probably work but is gross.
-  (let ((request (make-instance 'request :acceptor acceptor :reply (make-instance 'reply :acceptor acceptor))))
-    (send-response 
-     request
-     (make-socket-stream socket acceptor)
-     +http-service-unavailable+
-     :content (acceptor-status-message request +http-service-unavailable+))))
 
 (defun create-connection-handler-thread (taskmaster acceptor socket)
   "Create a thread for handling a single request"

@@ -144,7 +144,8 @@
           (setf (cdr (assoc :content-length headers)) (content-length reply))
           (push (cons :content-length (content-length reply)) headers)))
     ;; access log message
-    (log-access request :return-code status-code)
+    (unless (= status-code +http-service-unavailable+)
+      (log-access request :return-code status-code))
     ;; Read post data to clear stream - Force binary mode to avoid OCTETS-TO-STRING overhead.
     (raw-post-data request :force-binary t)
     (let* ((client-header-stream (flex:make-flexi-stream stream :external-format :iso-8859-1))
@@ -166,6 +167,27 @@
       (write-sequence content stream)
       (finish-output stream))
     stream))
+
+(defun quick-send-response (stream status-code)
+  (let ((headers `((:content-length . 0))))
+  
+    ;; FIXME: might like to still log access message which we can't do
+    ;; at the moment because there's no request object.
+
+    ;; Read post data to clear stream - Force binary mode to avoid OCTETS-TO-STRING overhead.
+    (let* ((client-header-stream (flex:make-flexi-stream stream :external-format :iso-8859-1))
+           (header-stream (if *header-stream*
+                              (make-broadcast-stream *header-stream* client-header-stream)
+                              client-header-stream)))
+      ;; start with status line
+      (format header-stream "HTTP/1.1 ~D ~A~C~C" status-code (reason-phrase status-code) #\Return #\Linefeed)
+      ;; write all headers from the REPLY object
+      (loop for (key . value) in headers
+         when value
+         do (write-header-line (as-capitalized-string key) value header-stream))
+      (format header-stream "~C~C" #\Return #\Linefeed))
+    (finish-output stream)
+    (close stream)))
 
 (defun send-headers (request) (start-output request))
 

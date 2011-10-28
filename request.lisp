@@ -163,8 +163,10 @@ slot values are computed in this :AFTER method."
            (unless (headers-sent-p reply)
              (handler-case
                  (with-debugger
-                   (start-output request
-                                 (or (acceptor-status-message request (return-code reply)) body)))
+                   ;;; I've reversed things here: if the handler
+                   ;;; supplied a body, we use it. Otherwise, we'll
+                   ;;; try and provide a default body
+                   (start-output request (or body (simple-error-message request))))
                (error (e)
                  ;; error occured while writing to the client. attempt to report.
                  (report-error-to-client request e)))))
@@ -180,12 +182,9 @@ slot values are computed in this :AFTER method."
      error
      (when *log-lisp-backtraces-p* backtrace)))
   (setf (return-code (reply request)) +http-internal-server-error+)
-  (start-output request
-                (acceptor-status-message 
-                 request 
-                 +http-internal-server-error+
-                 :error (princ-to-string error)
-                 :backtrace (princ-to-string backtrace))))
+  (start-output 
+   request
+   (simple-error-message request :error error :backtrace backtrace)))
 
 (defun delete-tmp-files (request)
   (dolist (path (tmp-files request))

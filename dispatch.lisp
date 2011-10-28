@@ -39,6 +39,8 @@
 (defun make-static-file-dispatcher (document-root)
   (lambda (request reply)
     (let ((script-name (script-name request)))
+      (when (string= script-name "/fail")
+        (error "Boo!")) 
       (unless (safe-filename-p script-name)
         (abort-request-handler request +http-forbidden+))
       (handle-static-file request reply (resolve-file script-name document-root)))))

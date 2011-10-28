@@ -280,108 +280,17 @@ SEND-HEADERS has not been called."
   (setf (return-code (reply request)) response-status-code)
   (throw 'handler-done body))
 
-(defun acceptor-status-message (request http-status-code &rest properties &key &allow-other-keys)
-  "This function is called after the request's handler has been
-   invoked to convert the HTTP-STATUS-CODE to a HTML message to be
-   displayed to the user.  If this function returns a string, that
-   string is sent to the client instead of the content produced by the
-   handler, if any.
-
-   If an ERROR-TEMPLATE-DIRECTORY is set in the current acceptor and
-   the directory contains a file corresponding to HTTP-STATUS-CODE
-   named <code>.html, that file is sent to the client after variable
-   substitution.  Variables are referenced by ${<variable-name>}.
-
-   Additional keyword arguments may be provided which are made
-   available to the templating logic as substitution variables.  These
-   variables can be interpolated into error message templates in,
-   which contains the current URL relative to the server and without
-   GET parameters.
-
-   In addition to the variables corresponding to keyword arguments,
-   the script-name, lisp-implementation-type,
-   lisp-implementation-version and toot-version variables are
-   available."
-  (let ((acceptor (acceptor request))
-        (reply (reply request)))
-    (handler-case
-        (labels
-            ((substitute-request-context-variables (string)
-               (let ((properties (append `(:script-name ,(script-name request)
-                                                        :lisp-implementation-type ,(lisp-implementation-type)
-                                                        :lisp-implementation-version ,(lisp-implementation-version)
-                                                        :toot-version ,*toot-version*)
-                                         properties)))
-                 (cl-ppcre:regex-replace-all "(?i)\\$\\{([a-z0-9-_]+)\\}"
-                                             string
-                                             (lambda (target-string start end match-start match-end reg-starts reg-ends)
-                                               (declare (ignore start end match-start match-end))
-                                               (let ((variable-name (string-as-keyword (subseq target-string
-                                                                                               (aref reg-starts 0)
-                                                                                               (aref reg-ends 0)))))
-                                                 (escape-for-html (princ-to-string (getf properties variable-name variable-name))))))))
-             (file-contents (file)
-               (let ((buf (make-string (file-length file))))
-                 (read-sequence buf file)
-                 buf))
-             (error-contents-from-template ()
-               (let ((error-file-template-pathname (and (acceptor-error-template-directory acceptor)
-                                                        (probe-file (make-pathname :name (princ-to-string http-status-code)
-                                                                                   :type "html"
-                                                                                   :defaults (acceptor-error-template-directory acceptor))))))
-                 (when error-file-template-pathname
-                   (with-open-file (file error-file-template-pathname :if-does-not-exist nil :element-type 'character)
-                     (when file
-                       (setf (content-type reply) "text/html")
-                       (substitute-request-context-variables (file-contents file))))))))
-          (or
-           ;; on error status codes make a cooked message, if m-c-m knows how.
-           (when (>= 300 http-status-code)
-             (apply 'make-cooked-message request reply http-status-code properties))
-           ;; if not (i.e. non error status codes or m-c-m doesn't have anything) look for a template
-           (error-contents-from-template)
-           ;; no template, then try make-cooked-message in case it
-           ;; knows how to handle a status code < 300. (Which it
-           ;; doesn't so this is silly.)
-           (apply 'make-cooked-message request reply http-status-code properties)))
-      (error (e)
-        (log-message acceptor :error "error ~A during error processing, sending cooked message to client" e)
-        (apply 'make-cooked-message request reply http-status-code properties)))))
-
-(defun make-cooked-message (request reply http-status-code &key error backtrace)
-  (labels ((cooked-message (format &rest arguments)
-             (setf (content-type reply) "text/html; charset=iso-8859-1")
-             (format nil "<html><head><title>~D ~A</title></head><body><h1>~:*~A</h1>~?<p><hr>~A</p></body></html>"
-                     http-status-code (reason-phrase http-status-code)
-                     format (mapcar (lambda (arg)
-                                      (if (stringp arg)
-                                          (escape-for-html arg)
-                                          arg))
-                                    arguments)
-                     (address-string request))))
-    (case http-status-code
-      ((#.+http-moved-temporarily+
-        #.+http-moved-permanently+)
-       (cooked-message "The document has moved <a href='~A'>here</a>" (header-out :location reply)))
-      ((#.+http-authorization-required+)
-       (cooked-message "The server could not verify that you are authorized to access the document requested.  ~
-                        Either you supplied the wrong credentials \(e.g., bad password), or your browser doesn't ~
-                        understand how to supply the credentials required."))
-      ((#.+http-forbidden+)
-       (cooked-message "You don't have permission to access ~A on this server."
-                       (script-name request)))
-      ((#.+http-not-found+)
-       (cooked-message "The requested URL ~A was not found on this server."
-                       (script-name request)))
-      ((#.+http-bad-request+)
-       (cooked-message "Your browser sent a request that this server could not understand."))
-      ((#.+http-internal-server-error+)
-       (if *show-lisp-errors-p*
-           (cooked-message "<pre>~A~@[~%~%Backtrace:~%~%~A~]</pre>"
-                           (escape-for-html (princ-to-string error))
-                           (when *show-lisp-backtraces-p*
-                             (escape-for-html (princ-to-string backtrace))))
-           (cooked-message "An error has occured")))))) 
+(defun simple-error-message (request &key error backtrace)
+  (let ((status-code (return-code (reply request))))
+    (with-output-to-string (s)
+      (format s "<html><head><title>~d: ~a</title></head><body><h1>~2:*~d: ~a</h1></body></html>"
+              status-code (reason-phrase status-code))
+      (if *show-lisp-errors-p*
+          (format s "<pre>~a~@[~%~%Backtrace:~%~%~a~]</pre>"
+                  (escape-for-html (princ-to-string error))
+                  (when *show-lisp-backtraces-p*
+                    (escape-for-html (princ-to-string backtrace))))))))
+ 
 
 (defun acceptor-server-name (acceptor)
   (format nil "Toot ~A (~A)" *toot-version* (acceptor-name acceptor)))
