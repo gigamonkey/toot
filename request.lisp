@@ -25,7 +25,7 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(in-package :hunchentoot)
+(in-package :toot)
 
 (defclass request ()
   ((acceptor :initarg :acceptor :reader acceptor)
@@ -198,7 +198,7 @@ alist or NIL if there was no data or the data could not be parsed."
              (make-tmp-filename-generator request))
           (let ((stray-data (get-post-data request :already-read (flexi-stream-position content-stream))))
             (when (and stray-data (plusp (length stray-data)))
-              (hunchentoot-warn "~A octets of stray data after form-data sent by client."
+              (toot-warn "~A octets of stray data after form-data sent by client."
                                 (length stray-data))))))
     (error (condition)
       (log-message (acceptor request) :error "While parsing multipart/form-data parameters: ~A" condition)
@@ -213,7 +213,7 @@ will only be done if the RAW-POST-DATA slot in the REQUEST is false.
 EXTERNAL-FORMAT specifies the external format of the data in the
 request body.  By default, the encoding is determined from the
 Content-Type header of the request or from
-*HUNCHENTOOT-DEFAULT-EXTERNAL-FORMAT* if none is found."
+*TOOT-DEFAULT-EXTERNAL-FORMAT* if none is found."
   (when (and (header-in :content-type request)
              (member (request-method request) *methods-for-post-parameters* :test #'eq)
              (or force
@@ -233,10 +233,10 @@ no Content-Length header and input chunking is off.")
                                        (handler-case
                                            (make-external-format charset :eol-style :lf)
                                          (error ()
-                                           (hunchentoot-warn "Ignoring ~
+                                           (toot-warn "Ignoring ~
 unknown character set ~A in request content type."
                                                  charset))))
-                                     *hunchentoot-default-external-format*)))
+                                     *toot-default-external-format*)))
             (setf (slot-value request 'post-parameters)
                   (cond ((and (string-equal type "application")
                               (string-equal subtype "x-www-form-urlencoded"))
@@ -256,7 +256,7 @@ unknown character set ~A in request content type."
               (close-stream-p (reply request)) t)
         (abort-request-handler)))))
 
-(defun recompute-request-parameters (request &key (external-format *hunchentoot-default-external-format*))
+(defun recompute-request-parameters (request &key (external-format *toot-default-external-format*))
   "Recomputes the GET and POST parameters for the REQUEST object
 REQUEST.  This only makes sense if you're switching external formats
 during the request."
@@ -360,7 +360,7 @@ returned."
       (handler-case
           (make-external-format (as-keyword charset) :eol-style :lf)
         (error ()
-          (hunchentoot-warn "Invalid character set ~S in request has been ignored."
+          (toot-warn "Invalid character set ~S in request has been ignored."
                             charset))))))
 
 (defun raw-post-data (request &key external-format force-text force-binary want-stream)
@@ -370,12 +370,12 @@ is a string if the type of the `Content-Type' media type is \"text\",
 and a vector of octets otherwise.  In the case of a string, the
 external format to be used to decode the content will be determined
 from the `charset' parameter sent by the client \(or otherwise
-*HUNCHENTOOT-DEFAULT-EXTERNAL-FORMAT* will be used).
+*TOOT-DEFAULT-EXTERNAL-FORMAT* will be used).
 
 You can also provide an external format explicitly \(through
 EXTERNAL-FORMAT) in which case the result will unconditionally be a
 string.  Likewise, you can provide a true value for FORCE-TEXT which
-will force Hunchentoot to act as if the type of the media type had
+will force Toot to act as if the type of the media type had
 been \"text\".  Or you can provide a true value for FORCE-BINARY which
 means that you want a vector of octets at any rate.
 
@@ -385,7 +385,7 @@ read from it yourself.  It is then your responsibility to read the
 correct amount of data, because otherwise you won't be able to return
 a response to the client.  If the content type of the request was
 `multipart/form-data' or `application/x-www-form-urlencoded', the
-content has been read by Hunchentoot already and you can't read from
+content has been read by Toot already and you can't read from
 the stream anymore.
 
 You can call RAW-POST-DATA more than once per request, but you can't
@@ -398,7 +398,7 @@ content even if the request method is not POST."
   (unless (or external-format force-binary)
     (setf external-format (or (external-format-from-content-type (header-in :content-type request))
                               (when force-text
-                                *hunchentoot-default-external-format*))))
+                                *toot-default-external-format*))))
   (let ((raw-post-data (or (slot-value request 'raw-post-data)
                            (get-post-data request :want-stream want-stream))))
     (cond ((typep raw-post-data 'stream) raw-post-data)

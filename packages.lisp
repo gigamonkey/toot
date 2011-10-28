@@ -1,4 +1,3 @@
-
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz. All rights reserved.
 
 ;;; Redistribution and use in source and binary forms, with or without
@@ -27,12 +26,11 @@
 
 (in-package :cl-user)
 
-(defpackage #:hunchentoot
-  (:use :cl :cl-ppcre :chunga :flexi-streams :url-rewrite)
-  (:shadow #:defconstant
-           #:url-encode)
+(defpackage #:toot
+  (:use :cl :cl-ppcre :chunga :flexi-streams)
+  (:shadow #:defconstant)
   ;; see asdf system definition
-  (:import-from :hunchentoot-asd :*hunchentoot-version*)
+  (:import-from :toot-asd :*toot-version*)
   (:export #:*approved-return-codes*
            #:*catch-errors-p*
            #:*default-connection-timeout*
@@ -43,7 +41,7 @@
            #:*handle-http-errors-p*
            #:*header-stream*
            #:*http-error-handler*
-           #:*hunchentoot-default-external-format*
+           #:*toot-default-external-format*
            #:*lisp-errors-log-level*
            #:*lisp-warnings-log-level*
            #:*log-lisp-backtraces-p*
@@ -154,9 +152,9 @@
            #:headers-out*
            #:host
            #:http-token-p
-           #:hunchentoot-condition
-           #:hunchentoot-error
-           #:hunchentoot-warning
+           #:toot-condition
+           #:toot-error
+           #:toot-warning
            #:initialize-connection-stream
            #:maybe-invoke-debugger
            #:mime-type

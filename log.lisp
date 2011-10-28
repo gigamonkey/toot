@@ -25,7 +25,7 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(in-package :hunchentoot)
+(in-package :toot)
 
 (defmacro with-log-stream ((stream-var destination lock) &body body)
   "Helper macro to write log entries.  STREAM-VAR is a symbol that
@@ -41,7 +41,7 @@ file, that error will be logged to *ERROR-OUTPUT*.
 Note that logging to a file involves opening and closing the log file
 for every logging operation, which is overall costly.  Web servers
 with high throughput demands should make use of a specialized logging
-function rather than relying on Hunchentoot's default logging
+function rather than relying on Toot's default logging
 facility."
   (with-unique-names (binary-stream)
     (with-rebinding (destination)

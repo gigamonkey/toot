@@ -25,7 +25,7 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(in-package :hunchentoot)
+(in-package :toot)
 
 (defmacro defconstant (name value &optional doc)
   "Make sure VALUE is evaluated only once \(to appease SBCL)."
@@ -111,7 +111,7 @@ date format.")
 (defvar *file-upload-hook* nil
   "If this is not NIL, it should be a unary function which will
 be called with a pathname for each file which is uploaded to
-Hunchentoot.  The pathname denotes the temporary file to which
+Toot.  The pathname denotes the temporary file to which
 the uploaded file is written.  The hook is called directly before
 the file is created.")
 
@@ -123,7 +123,7 @@ response will automatically be added to the content type in a
 
 (defvar *methods-for-post-parameters* '(:post)
   "A list of the request method types \(as keywords) for which
-Hunchentoot will try to compute POST-PARAMETERS.")
+Toot will try to compute POST-PARAMETERS.")
 
 (defvar *header-stream* nil
   "If this variable is not NIL, it should be bound to a stream to
@@ -163,7 +163,7 @@ the ACCEPTOR-LOG-MESSAGE function.")
 the ACCEPTOR-LOG-ACCESS function.")
 
 (defvar *catch-errors-p* t
-  "Whether Hunchentoot should catch and log errors \(or rather invoke
+  "Whether Toot should catch and log errors \(or rather invoke
 the debugger).")
 
 (defconstant +implementation-link+
@@ -175,8 +175,8 @@ the debugger).")
   "A link to the website of the underlying Lisp implementation.")
 
 (defvar *tmp-directory*
-  #+(or :win32 :mswindows) "c:\\hunchentoot-temp\\"
-  #-(or :win32 :mswindows) "/tmp/hunchentoot/"
+  #+(or :win32 :mswindows) "c:\\toot-temp\\"
+  #-(or :win32 :mswindows) "/tmp/toot/"
   "Directory for temporary files created by MAKE-TMP-FILE-NAME.")
 
 (defvar *tmp-counter* 0
@@ -192,7 +192,7 @@ output of binary data.")
   "A FLEXI-STREAMS external format used internally for logging and to
 encode cookie values.")
 
-(defvar *hunchentoot-default-external-format* +utf-8+
+(defvar *toot-default-external-format* +utf-8+
   "The external format used to compute the REQUEST object.")
 
 (defconstant +buffer-length+ 8192
@@ -208,16 +208,16 @@ from and writing to a socket stream.")
   "Time in seconds to wait for a new connection to arrive before
 performing a cleanup run.")
 
-(pushnew :hunchentoot *features*)
+(pushnew :toot *features*)
 
 ;; stuff for Nikodemus Siivola's HYPERDOC
 ;; see <http://common-lisp.net/project/hyperdoc/>
 ;; and <http://www.cliki.net/hyperdoc>
 
-(defvar *hyperdoc-base-uri* "http://weitz.de/hunchentoot/")
+(defvar *hyperdoc-base-uri* "http://www.gigamonkeys.com/toot/")
 
 (let ((exported-symbols-alist
-       (loop for symbol being the external-symbols of :hunchentoot
+       (loop for symbol being the external-symbols of :toot
              collect (cons symbol (concatenate 'string "#" (string-downcase symbol))))))
   (defun hyperdoc-lookup (symbol type)
     (declare (ignore type))

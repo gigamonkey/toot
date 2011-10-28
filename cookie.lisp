@@ -25,7 +25,7 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(in-package :hunchentoot)
+(in-package :toot)
 
 (defclass cookie ()
   ((name :initarg :name :reader cookie-name :type string)

@@ -25,7 +25,7 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(in-package :hunchentoot)
+(in-package :toot)
 
 (defclass taskmaster () ())
 
@@ -88,7 +88,7 @@
    (worker-thread-name-format
     :type (or string null)
     :initarg :worker-thread-name-format
-    :initform "hunchentoot-worker-~A"
+    :initform "toot-worker-~A"
     :accessor taskmaster-worker-thread-name-format))
   (:default-initargs
    :max-thread-count *default-max-thread-count*
@@ -106,12 +106,12 @@ MAX-ACCEPT-COUNT is supplied, it must be greater than MAX-THREAD-COUNT;
 in this case, requests are accepted up to MAX-ACCEPT-COUNT, and only
 then is HTTP 503 sent.
 
-In a load-balanced environment with multiple Hunchentoot servers, it's
+In a load-balanced environment with multiple Toot servers, it's
 reasonable to provide MAX-THREAD-COUNT but leave MAX-ACCEPT-COUNT null.
 This will immediately result in HTTP 503 when one server is out of
 resources, so the load balancer can try to find another server.
 
-In an environment with a single Hunchentoot server, it's reasonable
+In an environment with a single Toot server, it's reasonable
 to provide both MAX-THREAD-COUNT and a somewhat larger value for
 MAX-ACCEPT-COUNT.  This will cause a server that's almost out of
 resources to wait a bit; if the server is completely out of resources,
@@ -236,7 +236,7 @@ is set up via PROCESS-REQUEST."
 
 (defun listen-thread-name (acceptor)
   (with-accessors ((address acceptor-address) (port acceptor-port)) acceptor
-    (format nil "hunchentoot-listener-~A:~A" (or address "*") port)))
+    (format nil "toot-listener-~A:~A" (or address "*") port)))
 
 (defun connection-handler-thread-name (taskmaster socket)
   (let ((address (usocket:get-peer-address socket))

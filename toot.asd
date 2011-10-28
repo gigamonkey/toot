@@ -1,4 +1,3 @@
-
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz.  All rights reserved.
 
 ;;; Redistribution and use in source and binary forms, with or without
@@ -27,38 +26,30 @@
 
 (in-package :cl-user)
 
-(defpackage :hunchentoot-asd
-  (:use :cl :asdf))
+(defpackage :toot-asd (:use :cl :asdf))
 
-(in-package :hunchentoot-asd)
+(in-package :toot-asd)
 
-(defvar *hunchentoot-version* "1.1.1"
-  "A string denoting the current version of Hunchentoot.  Used
-for diagnostic output.")
+(defvar *toot-version* "0.0.1"
+  "A string denoting the current version of Toot. Used for diagnostic
+output.")
 
-(export '*hunchentoot-version*)
+(export '*toot-version*)
 
-(defsystem :hunchentoot
+(defsystem :toot
   :serial t
-  :version #.*hunchentoot-version*
+  :version #.*toot-version*
   :depends-on (:chunga
                :cl-base64
                :cl-fad
                :cl-ppcre
                :flexi-streams
-               #-:hunchentoot-no-ssl :cl+ssl
+               :cl+ssl
                :md5
                :trivial-backtrace
                :usocket
                :bordeaux-threads)
-  :components ((:module url-rewrite
-                :serial t
-                :components ((:file "packages")
-                             (:file "specials")
-                             (:file "primitives")
-                             (:file "util")
-                             (:file "url-rewrite")))
-               (:file "packages")
+  :components ((:file "packages")
                (:file "rfc2388")
                (:file "compat")
                (:file "specials")
@@ -74,26 +65,3 @@ for diagnostic output.")
                (:file "set-timeouts")
                (:file "taskmaster")
                (:file "acceptor")))
-
-(defsystem :hunchentoot-test
-  :components ((:module "test"
-                        :serial t
-                        :components ((:file "packages")
-                                     (:file "test-handlers")
-                                     (:file "script-engine")
-                                     (:file "script"))))
-  :depends-on (:hunchentoot :cl-who :cl-ppcre :drakma))
-
-(defmethod perform ((o test-op) (c (eql (find-system 'hunchentoot))))
-  (operate 'load-op 'hunchentoot-test)
-  (format t "~&;; Starting web server on localhost:4242.")
-  (force-output)
-  (funcall (intern (symbol-name :start) (find-package :hunchentoot))
-           (make-instance (intern (symbol-name :acceptor) (find-package :hunchentoot)) :port 4242))
-  (format t "~&;; Sleeping 2 seconds...")
-  (force-output)
-  (sleep 2)
-  (format t "~&;; Now running confidence tests.")
-  (force-output)
-  (funcall (intern (symbol-name :test-hunchentoot) (find-package :hunchentoot-test))
-           "http://localhost:4242"))

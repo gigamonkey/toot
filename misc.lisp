@@ -24,7 +24,7 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(in-package :hunchentoot)
+(in-package :toot)
 
 (defun create-prefix-dispatcher (prefix handler)
   "Creates a request dispatch function which will dispatch to the
@@ -79,7 +79,7 @@ had returned RESULT.  See the source code of REDIRECT for an example."
     bytes-to-send))
 
 (defun handle-static-file (request reply pathname &optional content-type)
-  "A function which acts like a Hunchentoot handler for the file
+  "A function which acts like a Toot handler for the file
 denoted by PATHNAME.  Sends a content type header corresponding to
 CONTENT-TYPE or \(if that is NIL) tries to determine the content type
 via the file's suffix."
@@ -203,7 +203,19 @@ If CODE is a 3xx redirection code, it will be sent as status code."
           (return-code reply) code)
     (abort-request-handler)))
 
-(defun require-authorization (reply &optional (realm "Hunchentoot"))
+(defun starts-with-scheme-p (string)
+  "Checks whether the string STRING represents a URL which starts with
+a scheme, i.e. something like 'https://' or 'mailto:'."
+  (loop with scheme-char-seen-p = nil
+        for c across string
+        when (or (char-not-greaterp #\a c #\z)
+                 (digit-char-p c)
+                 (member c '(#\+ #\- #\.) :test #'char=))
+        do (setq scheme-char-seen-p t)
+        else return (and scheme-char-seen-p
+                         (char= c #\:))))
+
+(defun require-authorization (reply &optional (realm "Toot"))
   "Sends back appropriate headers to require basic HTTP authentication
 \(see RFC 2617) for the realm REALM."
   (setf (header-out :www-authenticate reply) (format nil "Basic realm=\"~A\"" (quote-string realm))

@@ -25,7 +25,7 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(in-package :hunchentoot)
+(in-package :toot)
 
 (defun starts-with-p (seq subseq &key (test 'eql))
   "Tests whether the sequence SEQ starts with the sequence
@@ -59,7 +59,7 @@ digits."
 
 (defun reason-phrase (return-code)
   "Returns a reason phrase for the HTTP return code RETURN-CODE
-\(which should be an integer) or NIL for return codes Hunchentoot
+\(which should be an integer) or NIL for return codes Toot
 doesn't know."
   (gethash return-code *http-reason-phrase-map* 
            "No reason phrase known"))
@@ -133,7 +133,7 @@ according to HTTP/1.1 \(RFC 2068)."
            #+:allegro (pathname (system:make-temp-file-name prefix *tmp-directory*))
            #-:allegro 
            (loop for pathname = (make-pathname 
-                                 :name (format nil "hunchentoot-~A" (incf *tmp-counter*))
+                                 :name (format nil "toot-~A" (incf *tmp-counter*))
                                  :type nil
                                  :defaults *tmp-directory*)
               unless (probe-file pathname) return pathname)))
@@ -176,7 +176,7 @@ The macro also uses SETF to store the new vector in VECTOR."
                                                `(aref ,vector i)))
                finally (return new-vector))))
 
-(defun url-decode (string &optional (external-format *hunchentoot-default-external-format*))
+(defun url-decode (string &optional (external-format *toot-default-external-format*))
   "Decodes a URL-encoded STRING which is assumed to be encoded using
 the external format EXTERNAL-FORMAT."
   (when (zerop (length string))
@@ -221,7 +221,7 @@ the external format EXTERNAL-FORMAT."
           (t (octets-to-string vector :external-format external-format)))))
 
 (defun form-url-encoded-list-to-alist (form-url-encoded-list
-                                       &optional (external-format *hunchentoot-default-external-format*))
+                                       &optional (external-format *toot-default-external-format*))
   "Converts a list FORM-URL-ENCODED-LIST of name/value pairs into an
 alist.  Both names and values are url-decoded while doing this."
   (mapcar #'(lambda (entry)
@@ -231,7 +231,7 @@ alist.  Both names and values are url-decoded while doing this."
                       (url-decode (or value "") external-format))))
           form-url-encoded-list))
 
-(defun url-encode (string &optional (external-format *hunchentoot-default-external-format*))
+(defun url-encode (string &optional (external-format *toot-default-external-format*))
   "URL-encodes a string using the external format EXTERNAL-FORMAT."
   (with-output-to-string (s)
     (loop for c across string
@@ -292,14 +292,14 @@ values of the `Connection' header."
                 keep-alive-requested-p)))))
 
 (defun address-string (request)
-  "Returns a string with information about Hunchentoot suitable for
+  "Returns a string with information about Toot suitable for
 inclusion in HTML output."
   (flet ((escape-for-html (arg)
            (if arg
                (escape-for-html arg)
                arg)))
-    (format nil "<address><a href='http://weitz.de/hunchentoot/'>Hunchentoot ~A</a> <a href='~A'>(~A ~A)</a>~@[ at ~A~:[ (port ~D)~;~]~]</address>"
-            *hunchentoot-version*
+    (format nil "<address><a href='http://www.gigamonkeys.com/toot/'>Toot ~A</a> <a href='~A'>(~A ~A)</a>~@[ at ~A~:[ (port ~D)~;~]~]</address>"
+            *toot-version*
             +implementation-link+
             (escape-for-html (lisp-implementation-type))
             (escape-for-html (lisp-implementation-version))

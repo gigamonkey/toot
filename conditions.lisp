@@ -25,43 +25,43 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(in-package :hunchentoot)
+(in-package :toot)
 
-(define-condition hunchentoot-condition (condition)
+(define-condition toot-condition (condition)
   ()
-  (:documentation "Superclass for all conditions related to Hunchentoot."))
+  (:documentation "Superclass for all conditions related to Toot."))
 
-(define-condition hunchentoot-error (hunchentoot-condition error)
+(define-condition toot-error (toot-condition error)
   ()
-  (:documentation "Superclass for all errors related to Hunchentoot."))
+  (:documentation "Superclass for all errors related to Toot."))
 
-(define-condition hunchentoot-simple-error (hunchentoot-error simple-condition)
+(define-condition toot-simple-error (toot-error simple-condition)
   ()
-  (:documentation "Like HUNCHENTOOT-ERROR but with formatting capabilities."))
+  (:documentation "Like TOOT-ERROR but with formatting capabilities."))
 
-(defun hunchentoot-error (format-control &rest format-arguments)
-  "Signals an error of type HUNCHENTOOT-SIMPLE-ERROR with the provided
+(defun toot-error (format-control &rest format-arguments)
+  "Signals an error of type TOOT-SIMPLE-ERROR with the provided
 format control and arguments."
-  (error 'hunchentoot-simple-error
+  (error 'toot-simple-error
          :format-control format-control
          :format-arguments format-arguments))
 
-(define-condition hunchentoot-warning (hunchentoot-condition warning)
+(define-condition toot-warning (toot-condition warning)
   ()
-  (:documentation "Superclass for all warnings related to Hunchentoot."))
+  (:documentation "Superclass for all warnings related to Toot."))
 
-(define-condition hunchentoot-simple-warning (hunchentoot-warning simple-condition)
+(define-condition toot-simple-warning (toot-warning simple-condition)
   ()
-  (:documentation "Like HUNCHENTOOT-WARNING but with formatting capabilities."))
+  (:documentation "Like TOOT-WARNING but with formatting capabilities."))
 
-(defun hunchentoot-warn (format-control &rest format-arguments)
-  "Signals a warning of type HUNCHENTOOT-SIMPLE-WARNING with the
+(defun toot-warn (format-control &rest format-arguments)
+  "Signals a warning of type TOOT-SIMPLE-WARNING with the
 provided format control and arguments."
-  (warn 'hunchentoot-simple-warning
+  (warn 'toot-simple-warning
         :format-control format-control
         :format-arguments format-arguments))
 
-(define-condition parameter-error (hunchentoot-simple-error)
+(define-condition parameter-error (toot-simple-error)
   ()
   (:documentation "Signalled if a function was called with incosistent or illegal parameters."))
 
@@ -72,14 +72,14 @@ format control and arguments."
          :format-control format-control
          :format-arguments format-arguments))
 
-(define-condition operation-not-implemented (hunchentoot-error)
+(define-condition operation-not-implemented (toot-error)
   ((operation :initarg :operation
-              :reader hunchentoot-operation-not-implemented-operation
+              :reader toot-operation-not-implemented-operation
               :documentation "The name of the unimplemented operation."))
   (:report (lambda (condition stream)
              (format stream "The operation ~A is not yet implemented for the implementation ~A.
 Consider sending a patch..."
-                     (hunchentoot-operation-not-implemented-operation condition)
+                     (toot-operation-not-implemented-operation condition)
                      (lisp-implementation-type))))
   (:documentation "This warning is signalled when an operation \(like
 SETUID for example) is not implemented for a specific Lisp."))
@@ -90,7 +90,7 @@ SETUID for example) is not implemented for a specific Lisp."))
 
 (defgeneric maybe-invoke-debugger (condition)
   (:documentation "This generic function is called whenever a
-condition CONDITION is signaled in Hunchentoot.  You might want to
+condition CONDITION is signaled in Toot.  You might want to
 specialize it on specific condition classes for debugging purposes.")
   (:method (condition)
    "The default method invokes the debugger with CONDITION if

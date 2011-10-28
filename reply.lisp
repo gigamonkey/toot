@@ -25,7 +25,7 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(in-package :hunchentoot)
+(in-package :toot)
 
 (defclass reply ()
   ((acceptor :initarg :acceptor :reader acceptor)
@@ -33,7 +33,7 @@
    (content-length :reader content-length :initform nil)
    (headers-out :initform nil :reader headers-out)
    (return-code :initform +http-ok+ :accessor return-code)
-   (external-format :initform *hunchentoot-default-external-format* :accessor reply-external-format)
+   (external-format :initform *toot-default-external-format* :accessor reply-external-format)
    (cookies-out :initform nil :accessor cookies-out)
    (headers-sent-p :initform nil :accessor headers-sent-p)
    (close-stream-p :initform t :accessor close-stream-p)))

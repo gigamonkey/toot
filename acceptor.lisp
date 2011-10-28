@@ -24,11 +24,11 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(in-package :hunchentoot)
+(in-package :toot)
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun default-document-directory (&optional sub-directory)
-    (asdf:system-relative-pathname :hunchentoot (format nil "www/~@[~A~]" sub-directory))))
+    (asdf:system-relative-pathname :toot (format nil "www/~@[~A~]" sub-directory))))
 
 (defclass acceptor ()
   ((port :initarg :port :reader acceptor-port)
@@ -45,7 +45,7 @@
    (acceptor-shutdown-p :initform t :accessor acceptor-shutdown-p)
    (requests-in-progress :initform 0 :accessor accessor-requests-in-progress)
    (shutdown-queue :initform (make-condition-variable) :accessor acceptor-shutdown-queue)
-   (shutdown-lock :initform (make-lock "hunchentoot-acceptor-shutdown") :accessor acceptor-shutdown-lock)
+   (shutdown-lock :initform (make-lock "toot-acceptor-shutdown") :accessor acceptor-shutdown-lock)
    (access-log-destination :initarg :access-log-destination :accessor acceptor-access-log-destination)
    (message-log-destination :initarg :message-log-destination :accessor acceptor-message-log-destination)
    (error-template-directory :initarg :error-template-directory :accessor acceptor-error-template-directory)
@@ -109,7 +109,7 @@
       acceptor
     
     (when listen-socket
-      (hunchentoot-error "acceptor ~A is already listening" acceptor))
+      (toot-error "acceptor ~A is already listening" acceptor))
     
     (setf shutdown-p nil)
     (setf listen-socket
@@ -198,7 +198,7 @@
                            ;; turn chunking on before we read the request body
                            (setf content-stream (make-chunked-stream content-stream))
                            (setf (chunked-stream-input-chunking-p content-stream) t))
-                          (t (hunchentoot-error "Client tried to use ~
+                          (t (toot-error "Client tried to use ~
 chunked encoding, but acceptor is configured to not use it.")))))
 
                     (multiple-value-bind (remote-addr remote-port)
@@ -297,7 +297,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
 
    In addition to the variables corresponding to keyword arguments,
    the script-name, lisp-implementation-type,
-   lisp-implementation-version and hunchentoot-version variables are
+   lisp-implementation-version and toot-version variables are
    available."
   (let ((acceptor (acceptor request))
         (reply (reply request)))
@@ -307,7 +307,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
                (let ((properties (append `(:script-name ,(script-name request)
                                                         :lisp-implementation-type ,(lisp-implementation-type)
                                                         :lisp-implementation-version ,(lisp-implementation-version)
-                                                        :hunchentoot-version ,*hunchentoot-version*)
+                                                        :toot-version ,*toot-version*)
                                          properties)))
                  (cl-ppcre:regex-replace-all "(?i)\\$\\{([a-z0-9-_]+)\\}"
                                              string
@@ -375,5 +375,5 @@ chunked encoding, but acceptor is configured to not use it.")))))
            (cooked-message "An error has occured")))))) 
 
 (defun acceptor-server-name (acceptor)
-  (format nil "Hunchentoot ~A (~A)" *hunchentoot-version* (acceptor-name acceptor)))
+  (format nil "Toot ~A (~A)" *toot-version* (acceptor-name acceptor)))
 
