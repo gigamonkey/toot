@@ -199,7 +199,7 @@ implementations."))
 (defun send-service-unavailable-reply (acceptor socket)
   "A helper function to send out a quick error reply, before any state
 is set up via PROCESS-REQUEST."
-  (acceptor-log-message acceptor :warning 
+  (log-message acceptor :warning 
                         "Can't handle a new request, too many request threads already")
 
   ;; FIXME acceptor status message needs (at least in some code
@@ -230,7 +230,7 @@ is set up via PROCESS-REQUEST."
     :name (connection-handler-thread-name taskmaster socket))
    (error (cond)
           ;; need to bind *ACCEPTOR* so that LOG-MESSAGE* can do its work.
-          (acceptor-log-message 
+          (log-message 
            acceptor *lisp-errors-log-level*
            "Error while creating worker thread for new incoming connection: ~A" cond))))
 

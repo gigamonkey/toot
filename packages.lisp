@@ -103,8 +103,6 @@
            #:acceptor-dispatch-request
            #:acceptor-error-template-directory
            #:acceptor-input-chunking-p
-           #:acceptor-log-access
-           #:acceptor-log-message
            #:acceptor-message-log-destination
            #:acceptor-name
            #:acceptor-output-chunking-p

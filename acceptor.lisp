@@ -161,7 +161,7 @@
   (handler-bind ((error
                   ;; abort if there's an error which isn't caught inside
                   (lambda (cond)
-                    (acceptor-log-message 
+                    (log-message 
                      acceptor 
                      *lisp-errors-log-level* 
                      "Error while processing connection: ~A" cond)
@@ -169,7 +169,7 @@
                  (warning
                   ;; log all warnings which aren't caught inside
                   (lambda (cond)
-                    (acceptor-log-message 
+                    (log-message 
                      acceptor
                      *lisp-warnings-log-level*
                      "Warning while processing connection: ~A" cond))))
@@ -236,7 +236,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
      (chunked-stream-stream stream))
     (t stream)))
 
-(defun acceptor-log-access (request &key return-code)
+(defun log-access (request &key return-code)
   (let ((acceptor (acceptor request))
         (reply (reply request)))
     (with-log-stream (stream (acceptor-access-log-destination acceptor) *access-log-lock*)
@@ -255,7 +255,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
               (referer request)
               (user-agent request)))))
 
-(defun acceptor-log-message (acceptor log-level format-string &rest format-arguments)
+(defun log-message (acceptor log-level format-string &rest format-arguments)
   (with-log-stream (stream (acceptor-message-log-destination acceptor) *message-log-lock*)
     (format stream "[~A~@[ [~A]~]] ~?~%"
             (iso-time) log-level
@@ -289,7 +289,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
        (warning
         (lambda (cond)
           (when *log-lisp-warnings-p*
-            (acceptor-log-message acceptor *lisp-warnings-log-level* "~A" cond)))))
+            (log-message acceptor *lisp-warnings-log-level* "~A" cond)))))
     (let ((dispatcher (make-static-file-dispatcher (acceptor-document-root acceptor))))
       (with-debugger
         (funcall dispatcher request reply)))))
@@ -362,7 +362,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
               (error-contents-from-template) ; try template
               (apply 'make-cooked-message request reply http-status-code properties))) ; fall back to cooked message
       (error (e)
-        (acceptor-log-message acceptor :error "error ~A during error processing, sending cooked message to client" e)
+        (log-message acceptor :error "error ~A during error processing, sending cooked message to client" e)
         (apply 'make-cooked-message request reply http-status-code properties)))))
 
 (defun make-cooked-message (request reply http-status-code &key error backtrace)
