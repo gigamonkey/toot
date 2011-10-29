@@ -26,25 +26,6 @@
 
 (in-package :toot)
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun default-document-directory (&optional sub-directory)
-    (asdf:system-relative-pathname :toot (format nil "www/~@[~A~]" sub-directory))))
-
-(defun default-error-message-generator (request error backtrace)
-  "Generate a bare-bones error page."
-  (let ((status-code (return-code (reply request))))
-    (with-output-to-string (s)
-      (format s "<html><head><title>~d: ~a</title></head><body><h1>~2:*~d: ~a</h1></body></html>"
-              status-code (reason-phrase status-code))
-      (if (and error *show-lisp-errors-p*)
-          (format s "<pre>~a~@[~%~%Backtrace:~%~%~a~]</pre>"
-                  (escape-for-html (princ-to-string error))
-                  (when (and backtrace *show-lisp-backtraces-p*)
-                    (escape-for-html (princ-to-string backtrace))))))))
-
- 
-
-
 (defclass acceptor ()
   ((port :initarg :port :reader acceptor-port)
    (address :initarg :address :reader acceptor-address)
@@ -81,7 +62,6 @@
     :access-log-destination *error-output*
     :message-log-destination *error-output*
     :ssl-adapter nil
-    :dispatcher (make-static-file-dispatcher (load-time-value (default-document-directory)))
     :error-generator #'default-error-message-generator))
 
 (defmethod print-object ((acceptor acceptor) stream)
@@ -114,6 +94,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Start and stop an acceptor
 
+(defun start-server (&key port)
+  (start (make-instance 'acceptor
+           :port port
+           :dispatcher (make-static-file-dispatcher (test-document-directory)))))
+
+
 (defun start (acceptor)
   (with-accessors 
         ((listen-socket acceptor-listen-socket)
@@ -122,10 +108,10 @@
          (port acceptor-port)
          (listen-backlog acceptor-listen-backlog))
       acceptor
-    
+
     (when listen-socket
       (toot-error "acceptor ~A is already listening" acceptor))
-    
+
     (setf shutdown-p nil)
     (setf listen-socket
           (usocket:socket-listen
@@ -133,7 +119,7 @@
            :reuseaddress t
            :backlog listen-backlog
            :element-type '(unsigned-byte 8)))
-
+      
     (execute-acceptor (taskmaster acceptor) acceptor)
     acceptor))
 
@@ -188,7 +174,7 @@
                      acceptor
                      *lisp-warnings-log-level*
                      "Warning while processing connection: ~A" cond))))
-    (with-mapped-conditions ()
+    (usocket:with-mapped-conditions ()
       (let ((content-stream (make-socket-stream socket acceptor)))
         (unwind-protect
              ;; process requests until either the acceptor is shut
@@ -288,16 +274,16 @@ chunked encoding, but acceptor is configured to not use it.")))))
       (with-debugger
         (dispatch (dispatcher acceptor) request reply)))))
 
-(defun error-page (request &key error backtrace)
-  "Generate the body of an error page, using the acceptors error generator."
-  (generate-error-page (error-generator (acceptor request)) request :error error :backtrace backtrace))
-
 (defun abort-request-handler (request response-status-code &optional body)
   "Abort the handling of a request, sending instead a response with
 the given response-status-code. A request can only be aborted if
 SEND-HEADERS has not been called."
   (setf (return-code (reply request)) response-status-code)
   (throw 'handler-done body))
+
+(defun error-page (request &key error backtrace)
+  "Generate the body of an error page, using the acceptors error generator."
+  (generate-error-page (error-generator (acceptor request)) request :error error :backtrace backtrace))
 
 (defun acceptor-server-name (acceptor)
   (format nil "Toot ~A (~A)" *toot-version* (acceptor-name acceptor)))

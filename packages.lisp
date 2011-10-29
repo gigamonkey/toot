@@ -31,16 +31,11 @@
   (:shadow #:defconstant)
   ;; see asdf system definition
   (:import-from :toot-asd :*toot-version*)
-  (:export #:*approved-return-codes*
-           #:*catch-errors-p*
+  (:export #:*catch-errors-p*
            #:*default-connection-timeout*
            #:*default-content-type*
-           #:*default-handler*
-           #:*dispatch-table*
            #:*file-upload-hook*
-           #:*handle-http-errors-p*
            #:*header-stream*
-           #:*http-error-handler*
            #:*toot-default-external-format*
            #:*lisp-errors-log-level*
            #:*lisp-warnings-log-level*
@@ -51,6 +46,8 @@
            #:*show-lisp-backtraces-p*
            #:*show-lisp-errors-p*
            #:*tmp-directory*
+
+           ;; HTTP status codes
            #:+http-accepted+
            #:+http-authorization-required+
            #:+http-bad-gateway+
@@ -93,9 +90,8 @@
            #:+http-unsupported-media-type+
            #:+http-use-proxy+
            #:+http-version-not-supported+
+
            #:abort-request-handler
-           #:accept-connections
-           #:acceptor
            #:acceptor-access-log-destination
            #:acceptor-address
            #:acceptor-dispatch-request

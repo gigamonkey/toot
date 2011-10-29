@@ -40,6 +40,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Static file dispatcher
 
+(defun test-document-directory (&optional sub-directory)
+  (asdf:system-relative-pathname :toot (format nil "www/~@[~A~]" sub-directory)))
+
 (defun make-static-file-dispatcher (document-root)
   (lambda (request reply)
     (let ((script-name (script-name request)))
@@ -64,3 +67,18 @@ tricky bits such as '..'"
 
 (defun script-name-to-filename (script-name)
   (if (equal script-name "/") "index.html" (subseq script-name 1)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Error page generation
+
+(defun default-error-message-generator (request error backtrace)
+  "Generate a bare-bones error page."
+  (let ((status-code (return-code (reply request))))
+    (with-output-to-string (s)
+      (format s "<html><head><title>~d: ~a</title></head><body><h1>~2:*~d: ~a</h1></body></html>"
+              status-code (reason-phrase status-code))
+      (if (and error *show-lisp-errors-p*)
+          (format s "<pre>~a~@[~%~%Backtrace:~%~%~a~]</pre>"
+                  (escape-for-html (princ-to-string error))
+                  (when (and backtrace *show-lisp-backtraces-p*)
+                    (escape-for-html (princ-to-string backtrace))))))))

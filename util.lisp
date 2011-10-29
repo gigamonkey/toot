@@ -285,9 +285,9 @@ values of the `Connection' header."
              (member value connection-values :test #'string-equal)))
       (let ((keep-alive-requested-p (connection-value-p "keep-alive")))
         (values (and (acceptor-persistent-connections-p (acceptor request))
-                     (or (and (eq (server-protocol request) :http/1.1)
+                     (or (and (eql (server-protocol request) :http/1.1)
                               (not (connection-value-p "close")))
-                         (and (eq (server-protocol request) :http/1.0)
+                         (and (eql (server-protocol request) :http/1.0)
                               keep-alive-requested-p)))
                 keep-alive-requested-p)))))
 
@@ -312,8 +312,3 @@ inclusion in HTML output."
 content stream. N.B. This is different "
   (chunked-stream-input-chunking-p (content-stream request)))
 
-(defmacro with-mapped-conditions (() &body body)
-  "Run BODY with usocket condition mapping in effect, i.e. platform specific network errors will be
-  signalled as usocket conditions.  For Lispworks, no mapping is performed."
-  `(usocket:with-mapped-conditions ()
-     ,@body))

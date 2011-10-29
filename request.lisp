@@ -228,7 +228,7 @@ Content-Type header of the request or from
              (or force
                  (not (slot-value request 'raw-post-data)))
 	     ;; can't reparse multipart posts, even when FORCEd
-	     (not (eq t (slot-value request 'raw-post-data))))
+	     (not (eql t (slot-value request 'raw-post-data))))
     (unless (or (header-in :content-length request)
                 (input-chunking-p request))
       (log-message (acceptor request) :warning "Can't read request body because there's ~

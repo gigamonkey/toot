@@ -57,12 +57,12 @@
          (return-code (return-code reply))
          (acceptor (acceptor request))
          (chunkedp (and (acceptor-output-chunking-p acceptor)
-                        (eq (server-protocol request) :http/1.1)
+                        (eql (server-protocol request) :http/1.1)
                         ;; only turn chunking on if the content
                         ;; length is unknown at this point...
                         (null (or (content-length reply) content-provided-p))))
          (request-method (request-method request))
-         (head-request-p (eq request-method :head)))
+         (head-request-p (eql request-method :head)))
 
     (multiple-value-bind (keep-alive-p keep-alive-requested-p)
         (keep-alive-p request)
@@ -84,7 +84,7 @@
         (keep-alive-p
          (setf (close-stream-p reply) nil)
          (when (and (acceptor-read-timeout acceptor)
-                    (or (not (eq (server-protocol request) :http/1.1))
+                    (or (not (eql (server-protocol request) :http/1.1))
                         keep-alive-requested-p))
            ;; persistent connections are implicitly assumed for
            ;; HTTP/1.1, but we return a 'Keep-Alive' header if the
@@ -194,7 +194,7 @@
 (defun read-initial-request-line (stream)
   (handler-case
       (let ((*current-error-message* "While reading initial request line:"))
-        (with-mapped-conditions ()
+        (usocket:with-mapped-conditions ()
           (read-line* stream)))
     ((or end-of-file usocket:timeout-error) ())))
 
