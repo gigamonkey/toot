@@ -280,8 +280,6 @@ asked for a persistent connection."
          (when-let (connection-header (header-in :connection request))
            (split "\\s*,\\s*" connection-header))))
     (flet ((connection-value-p (value)
-             "Checks whether the string VALUE is one of the
-values of the `Connection' header."
              (member value connection-values :test #'string-equal)))
       (let ((keep-alive-requested-p (connection-value-p "keep-alive")))
         (values (and (persistent-connections-p (acceptor request))
@@ -307,8 +305,7 @@ inclusion in HTML output."
             (scan ":\\d+$" (or (host request) ""))
             (port (acceptor request)))))
 
-(defun request-input-chunking-p (request)
+(defun chunking-input-p (request)
   "Whether input chunking is currently switched on for the acceptors
 content stream. N.B. This is different than whether the "
   (chunked-stream-input-chunking-p (content-stream request)))
-

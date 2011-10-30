@@ -95,29 +95,19 @@
            :port port
            :dispatcher (make-static-file-dispatcher (test-document-directory)))))
 
-
 (defun start (acceptor)
-  (with-accessors 
-        ((listen-socket listen-socket)
-         (shutdown-p shutdown-p)
-         (address address)
-         (port port)
-         (listen-backlog listen-backlog))
-      acceptor
+  (when (listen-socket acceptor)
+    (toot-error "acceptor ~A is already listening" acceptor))
 
-    (when listen-socket
-      (toot-error "acceptor ~A is already listening" acceptor))
-
-    (setf shutdown-p nil)
-    (setf listen-socket
-          (usocket:socket-listen
-           (or address usocket:*wildcard-host*) port
-           :reuseaddress t
-           :backlog listen-backlog
-           :element-type '(unsigned-byte 8)))
-      
-    (execute-acceptor (taskmaster acceptor) acceptor)
-    acceptor))
+  (setf (shutdown-p acceptor) nil)
+  (setf (listen-socket acceptor)
+        (usocket:socket-listen
+         (or (address acceptor) usocket:*wildcard-host*) (port acceptor)
+         :reuseaddress t
+         :backlog (listen-backlog acceptor)
+         :element-type '(unsigned-byte 8)))
+  (execute-acceptor (taskmaster acceptor) acceptor)
+  acceptor)
 
 (defun stop (acceptor &key soft)
   (setf (shutdown-p acceptor) t)
@@ -125,7 +115,7 @@
   (when soft
     (with-lock-held ((shutdown-lock acceptor))
       ;; FIXME: seems like this should perhaps be a while loop not a
-      ;; when? The thread which called STOP is waiting here while all
+      ;; WHEN? The thread which called STOP is waiting here while all
       ;; the threads processing requests will signal on the
       ;; shutdown-queue
       (when (plusp (accessor-requests-in-progress acceptor))

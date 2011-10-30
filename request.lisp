@@ -1,4 +1,3 @@
-
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz.  All rights reserved.
 
 ;;; Redistribution and use in source and binary forms, with or without
@@ -96,13 +95,13 @@ already been read."
                    stream))
                 ((and content-length (> content-length already-read))
                  (decf content-length already-read)
-                 (when (request-input-chunking-p request)
+                 (when (chunking-input-p request)
                    ;; see RFC 2616, section 4.4
                    (log-message request :warning "Got Content-Length header although input chunking is on."))
                  (let ((content (make-array content-length :element-type 'octet)))
                    (read-sequence content content-stream)
                    content))
-                ((request-input-chunking-p request)
+                ((chunking-input-p request)
                  (loop with buffer = (make-array +buffer-length+ :element-type 'octet)
                        with content = (make-array 0 :element-type 'octet :adjustable t)
                        for index = 0 then (+ index pos)
@@ -225,7 +224,7 @@ Content-Type header of the request or from
 	     ;; can't reparse multipart posts, even when FORCEd
 	     (not (eql t (slot-value request 'raw-post-data))))
     (unless (or (header-in :content-length request)
-                (request-input-chunking-p request))
+                (chunking-input-p request))
       (log-message request :warning "Can't read request body because there's ~
 no Content-Length header and input chunking is off.")
       (return-from maybe-read-post-parameters nil))
