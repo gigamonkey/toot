@@ -144,13 +144,13 @@ slot values are computed in this :AFTER method."
         ;; we assume it's not our fault...
         (setf (return-code (reply request)) +http-bad-request+)))))
 
-(defun process-request (request reply)
+(defun process-request (request)
   ;; used by HTTP HEAD handling to end request processing in a HEAD
   ;; request (see START-OUTPUT)
   (catch 'request-processed
     (unwind-protect
          (multiple-value-bind (body error backtrace) 
-             (handle-request (acceptor request) request reply)
+             (handle-request request)
 
            (when error (report-error-to-client request error backtrace))
 
@@ -160,7 +160,7 @@ slot values are computed in this :AFTER method."
            ;; clean up. Otherwise, if the return-code is one that
            ;; needs an error message we generate that or we return the
            ;; string returned by the handler as the body of the reply.
-           (unless (headers-sent-p reply)
+           (unless (headers-sent-p (reply request))
              (handler-case
                  (with-debugger
                    ;;; I've reversed things here: if the handler

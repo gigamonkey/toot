@@ -216,8 +216,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
                                            :content-stream content-stream
                                            :method method
                                            :uri url-string
-                                           :server-protocol protocol)
-                                         reply)))
+                                           :server-protocol protocol))))
                     (force-output content-stream)
                     (setf content-stream (unchunked-stream content-stream))
                     (when (close-stream-p reply) (return)))))
@@ -255,7 +254,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
                          (acceptor-write-timeout acceptor))
            (handle-incoming-connection (taskmaster acceptor) acceptor client-connection))))))
 
-(defun handle-request (acceptor request reply)
+(defun handle-request (request)
   ;; If the handler we dispatch to throws handler-done, we will return
   ;; the values thrown. Otherwise we return whatever values the
   ;; handler returns. If the handler returns a value (and it has not
@@ -267,14 +266,15 @@ chunked encoding, but acceptor is configured to not use it.")))))
           (lambda (cond)
             ;; if the headers were already sent, the error happened
             ;; within the body and we have to close the stream
-            (when (headers-sent-p reply) (setf (close-stream-p reply) t))
+            (let ((reply (reply request)))
+              (when (headers-sent-p reply) (setf (close-stream-p reply) t)))
             (throw 'handler-done (values nil cond (get-backtrace)))))
          (warning
           (lambda (cond)
             (when *log-lisp-warnings-p*
-              (log-message acceptor *lisp-warnings-log-level* "~A" cond)))))
+              (log-message request *lisp-warnings-log-level* "~A" cond)))))
       (with-debugger
-        (dispatch (dispatcher acceptor) request reply)))))
+        (dispatch (dispatcher (acceptor request)) request)))))
 
 (defun abort-request-handler (request response-status-code &optional body)
   "Abort the handling of a request, sending instead a response with

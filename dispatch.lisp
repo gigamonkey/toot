@@ -26,11 +26,11 @@
 
 (in-package :toot)
 
-(defgeneric dispatch (dispatcher request reply)
+(defgeneric dispatch (dispatcher request)
   (:documentation "An object that can be used by an acceptor to dispatch a request."))
 
-(defmethod dispatch ((dispatcher function) request reply)
-  (funcall dispatcher request reply))
+(defmethod dispatch ((dispatcher function) request)
+  (funcall dispatcher request))
 
 (defgeneric generate-error-page (generator request &key error backtrace))
 
@@ -44,13 +44,13 @@
   (asdf:system-relative-pathname :toot (format nil "www/~@[~A~]" sub-directory)))
 
 (defun make-static-file-dispatcher (document-root)
-  (lambda (request reply)
+  (lambda (request)
     (let ((script-name (script-name request)))
       (when (string= script-name "/fail")
         (error "Boo!")) 
       (unless (safe-filename-p script-name)
         (abort-request-handler request +http-forbidden+))
-      (handle-static-file request reply (resolve-file script-name document-root)))))
+      (handle-static-file request (reply request) (resolve-file script-name document-root)))))
 
 (defun safe-filename-p (script-name)
   "Verify that a script-name, translated to a file doesn't contain any
