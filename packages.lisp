@@ -136,7 +136,7 @@
            #:get-parameters
            #:get-parameters*
            #:handle-if-modified-since
-           #:handle-static-file
+           #:serve-file
            #:header-in
            #:header-in*
            #:header-out

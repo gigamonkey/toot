@@ -354,8 +354,5 @@ of file suffixes for the corresponding type.")
     hash)
   "A hash table which maps file suffixes to MIME types.")
 
-(defun mime-type (pathspec)
-  "Given a pathname designator PATHSPEC returns the MIME type
-\(as a string) corresponding to the suffix of the file denoted by
-PATHSPEC \(or NIL)."
-  (gethash (pathname-type pathspec) *mime-type-hash*))
+(defun guess-mime-type (extension)
+  (gethash extension *mime-type-hash*) "application/octet-stream")

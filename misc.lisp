@@ -47,11 +47,11 @@ matches the CL-PPCRE regular expression REGEX."
            handler))))
 
 (defun maybe-handle-range-header (request reply file)
-  "Helper function for handle-static-file.  Determines whether the
-  requests specifies a Range header.  If so, parses the header and
-  position the already opened file to the location specified.  Returns
-  the number of bytes to transfer from the file.  Invalid specified
-  ranges are reported to the client with a HTTP 416 status code."
+  "Helper function for serve-file. Determines whether the requests
+  specifies a Range header. If so, parses the header and position the
+  already opened file to the location specified. Returns the number of
+  bytes to transfer from the file. Invalid specified ranges are
+  reported to the client with a HTTP 416 status code."
   (let ((bytes-to-send (file-length file)))
     (cl-ppcre:register-groups-bind
         (start end)
@@ -73,45 +73,44 @@ matches the CL-PPCRE regular expression REGEX."
             (header-out :content-range reply) (format nil "bytes ~D-~D/*" start end)))
     bytes-to-send))
 
-(defun handle-static-file (request reply pathname &optional content-type)
-  "A function which acts like a Toot handler for the file
-denoted by PATHNAME.  Sends a content type header corresponding to
-CONTENT-TYPE or \(if that is NIL) tries to determine the content type
-via the file's suffix."
+(defun serve-file (request reply pathname &optional content-type)
+  "Serve the file denoted by PATHNAME. Sends a content type header
+corresponding to CONTENT-TYPE or \(if that is NIL) tries to determine
+the content type via the file's suffix. Aborts the request with 404:
+Not found if the file does not exist. Also handles an
+if-modified-since request appropriately."
   (when (or (wild-pathname-p pathname)
             (not (fad:file-exists-p pathname))
             (fad:directory-exists-p pathname))
     (abort-request-handler request +http-not-found+))
 
-  (let ((time (or (file-write-date pathname)
-                  (get-universal-time)))
-        bytes-to-send)
-    (setf (content-type reply) (or content-type
-                                   (mime-type pathname)
-                                   "application/octet-stream")
-          (header-out :last-modified reply) (rfc-1123-date time)
-          (header-out :accept-ranges reply) "bytes")
-    (handle-if-modified-since time request)
-    (with-open-file (file pathname
-                          :direction :input
-                          :element-type 'octet
-                          :if-does-not-exist nil)
-      (setf bytes-to-send (maybe-handle-range-header request reply file))
-      (setf (content-length reply) bytes-to-send)
+  (let ((time (or (file-write-date pathname) (get-universal-time))))
 
-      (let ((out (send-headers request))
-            (buf (make-array +buffer-length+ :element-type 'octet)))
-        #+:clisp
-        (setf (flexi-stream-element-type (content-stream (acceptor request))) 'octet)
-        (loop
-           (when (zerop bytes-to-send)
-             (return))
-           (let ((chunk-size (min +buffer-length+ bytes-to-send)))
-             (unless (eql chunk-size (read-sequence buf file :end chunk-size))
-               (error "can't read from input file"))
-             (write-sequence buf out :end chunk-size)
-             (decf bytes-to-send chunk-size)))
-        (finish-output out)))))
+    ;; FIXME: do we really need to set the headers even if we might
+    ;; send a not modified response? If not, let's check that first.
+    (setf (content-type reply) (or content-type (guess-mime-type (pathname-type pathname))))
+    (setf (header-out :last-modified reply) (rfc-1123-date time))
+    (setf (header-out :accept-ranges reply) "bytes")
+
+    (handle-if-modified-since time request)
+
+    (with-open-file (file pathname :direction :input :element-type 'octet :if-does-not-exist nil)
+      (let ((bytes-to-send (maybe-handle-range-header request reply file)))
+        (setf (content-length reply) bytes-to-send)
+
+        (let ((out (send-headers request))
+              (buf (make-array +buffer-length+ :element-type 'octet)))
+          #+:clisp
+          (setf (flexi-stream-element-type (content-stream (acceptor request))) 'octet)
+          (loop
+             (when (zerop bytes-to-send)
+               (return))
+             (let ((chunk-size (min +buffer-length+ bytes-to-send)))
+               (unless (eql chunk-size (read-sequence buf file :end chunk-size))
+                 (error "can't read from input file"))
+               (write-sequence buf out :end chunk-size)
+               (decf bytes-to-send chunk-size)))
+          (finish-output out))))))
 
 (defun create-static-file-dispatcher-and-handler (uri path &optional content-type)
   "Creates and returns a request dispatch function which will dispatch
@@ -125,7 +124,7 @@ determine the content type via the file's suffix."
       ;; the handler
       (lambda (request reply)
         (declare (ignore request))
-        (handle-static-file reply path content-type)))))
+        (serve-file reply path content-type)))))
 
 (defun enough-url (url url-prefix)
   "Returns the relative portion of URL relative to URL-PREFIX, similar
@@ -160,7 +159,7 @@ it'll be the content type used for all files in the folder."
                               (loop for component in (rest script-path-directory)
                                     always (stringp component))))
                (abort-request-handler request +http-forbidden+))
-             (handle-static-file reply (merge-pathnames script-path base-path) content-type))))
+             (serve-file reply (merge-pathnames script-path base-path) content-type))))
     (create-prefix-dispatcher uri-prefix #'handler)))
 
 (defun no-cache (reply)
@@ -172,7 +171,8 @@ it'll be the content type used for all files in the folder."
    (header-out :last-modified reply) (rfc-1123-date))
   (values))
 
-(defun redirect (request reply target &key (host (host request))
+(defun redirect (request reply target &key
+                 (host (host request))
                  port
                  (protocol (server-protocol request))
                  (code +http-moved-temporarily+))
