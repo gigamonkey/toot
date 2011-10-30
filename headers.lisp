@@ -144,8 +144,7 @@
           (setf (cdr (assoc :content-length headers)) (content-length reply))
           (push (cons :content-length (content-length reply)) headers)))
     ;; access log message
-    (unless (= status-code +http-service-unavailable+)
-      (log-access request :return-code status-code))
+    (log-access (access-logger (acceptor request)) request)
     ;; Read post data to clear stream - Force binary mode to avoid OCTETS-TO-STRING overhead.
     (raw-post-data request :force-binary t)
     (let* ((client-header-stream (flex:make-flexi-stream stream :external-format :iso-8859-1))

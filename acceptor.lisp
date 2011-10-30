@@ -26,6 +26,8 @@
 
 (in-package :toot)
 
+(defvar *default-logger* (make-instance 'stream-logger :destination *error-output*))
+
 (defclass acceptor ()
   ((port :initarg :port :reader acceptor-port)
    (address :initarg :address :reader acceptor-address)
@@ -42,8 +44,8 @@
    (requests-in-progress :initform 0 :accessor accessor-requests-in-progress)
    (shutdown-queue :initform (make-condition-variable) :accessor acceptor-shutdown-queue)
    (shutdown-lock :initform (make-lock "toot-acceptor-shutdown") :accessor acceptor-shutdown-lock)
-   (access-log-destination :initarg :access-log-destination :accessor acceptor-access-log-destination)
-   (message-log-destination :initarg :message-log-destination :accessor acceptor-message-log-destination)
+   (access-loggger :initarg :access-logger :accessor access-logger)
+   (message-logger :initarg :message-logger :accessor message-logger)
    (ssl-adapter :initarg :ssl-adapter :accessor ssl-adapter)
    (dispatcher :initarg :dispatcher :accessor dispatcher)
    (error-generator :initarg :error-generator :accessor error-generator))
@@ -54,13 +56,13 @@
     :name (gensym)
     :listen-backlog 50
     :taskmaster (make-instance *default-taskmaster-class*)
+    :access-logger *default-logger*
+    :message-logger *default-logger*
     :output-chunking-p t
     :input-chunking-p t
     :persistent-connections-p t
     :read-timeout *default-connection-timeout*
     :write-timeout *default-connection-timeout*
-    :access-log-destination *error-output*
-    :message-log-destination *error-output*
     :ssl-adapter nil
     :error-generator #'default-error-message-generator))
 
@@ -163,7 +165,7 @@
                   ;; abort if there's an error which isn't caught inside
                   (lambda (cond)
                     (log-message 
-                     acceptor 
+                     acceptor
                      *lisp-errors-log-level* 
                      "Error while processing connection: ~A" cond)
                     (return-from process-connection)))

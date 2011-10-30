@@ -63,11 +63,26 @@ facility."
                 (let ((,stream-var ,destination))
                   (prog1 (progn ,@body)
                     (finish-output *error-output*)))))))))))
-  
-(defun log-access (request &key return-code)
-  (let ((acceptor (acceptor request))
-        (reply (reply request)))
-    (with-log-stream (stream (acceptor-access-log-destination acceptor) *access-log-lock*)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Logging API -- the server logs HTTP requests and miscelaneous
+;; messages using these two generic functions, called on a logger
+;; object held by the server. The 
+
+(defgeneric log-access (logger request)
+  (:documentation "Write a log entry for the request to the access log."))
+
+(defgeneric log-message (logger log-level format-string &rest format-arguments)
+  (:documentation "Write a log entry to the message log."))
+
+(defclass stream-logger ()
+  ((destination :initarg :destination :reader destination)
+   (lock :initform (make-lock "log-lock") :reader lock)))
+
+(defmethod  log-access ((logger stream-logger) request)
+  (let* ((reply (reply request))
+         (return-code (return-code reply)))
+    (with-log-stream (stream (destination logger) (lock logger))
       (format stream "~:[-~@[ (~A)~]~;~:*~A~@[ (~A)~]~] ~:[-~;~:*~A~] [~A] \"~A ~A~@[?~A~] ~
                     ~A\" ~D ~:[-~;~:*~D~] \"~:[-~;~:*~A~]\" \"~:[-~;~:*~A~]\"~%"
               (remote-addr request)
@@ -83,10 +98,15 @@ facility."
               (referer request)
               (user-agent request)))))
 
-(defun log-message (acceptor log-level format-string &rest format-arguments)
-  (with-log-stream (stream (acceptor-message-log-destination acceptor) *message-log-lock*)
+(defmethod log-message ((logger stream-logger) log-level format-string &rest format-arguments)
+  (with-log-stream (stream (destination logger) (lock logger))
     (format stream "[~A~@[ [~A]~]] ~?~%"
             (iso-time) log-level
             format-string format-arguments)))
 
+(defmethod log-message ((request request) log-level format-string &rest format-arguments)
+  (apply #'log-message (acceptor request) log-level format-string format-arguments))
+
+(defmethod log-message ((acceptor acceptor) log-level format-string &rest format-arguments)
+  (apply #'log-message (message-logger acceptor) log-level format-string format-arguments))
 
