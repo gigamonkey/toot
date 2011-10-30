@@ -172,7 +172,7 @@
                     (get-request-data content-stream)
                   ;; check if there was a request at all
                   (unless method (return))
-                  (let ((reply (make-instance 'reply :acceptor acceptor))
+                  (let ((request nil)
                         (transfer-encodings (cdr (assoc* :transfer-encoding headers-in))))
 
                     (when transfer-encodings
@@ -190,19 +190,19 @@ chunked encoding, but acceptor is configured to not use it.")))))
                     (multiple-value-bind (remote-addr remote-port)
                         (get-peer-address-and-port socket)
                       (with-request-count-incremented (acceptor)
-                        (process-request (make-instance 'request
+                        (setf request (make-instance 'request
                                            :acceptor acceptor
-                                           :reply reply
                                            :remote-addr remote-addr
                                            :remote-port remote-port
                                            :headers-in headers-in
                                            :content-stream content-stream
                                            :method method
                                            :uri url-string
-                                           :server-protocol protocol))))
+                                           :server-protocol protocol))
+                        (process-request request)))
                     (force-output content-stream)
                     (setf content-stream (unchunked-stream content-stream))
-                    (when (close-stream-p reply) (return)))))
+                    (when (close-stream-p request) (return)))))
 
           (when content-stream
             ;; as we are at the end of the request here, we ignore all

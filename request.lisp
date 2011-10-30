@@ -27,23 +27,82 @@
 (in-package :toot)
 
 (defclass request ()
-  ((acceptor :initarg :acceptor :reader acceptor)
-   (reply :initarg :reply :reader reply)
-   (headers-in :initarg :headers-in :reader headers-in)
-   (method :initarg :method :reader request-method)
-   (uri :initarg :uri :reader request-uri)
-   (server-protocol :initarg :server-protocol :reader server-protocol)
-   (remote-addr :initarg :remote-addr :reader remote-addr)
-   (remote-port :initarg :remote-port :reader remote-port)
-   (content-stream :initarg :content-stream :accessor content-stream)
-   (cookies-in :initform nil :reader cookies-in)
-   (get-parameters :initform nil :reader get-parameters)
-   (post-parameters :initform nil :reader post-parameters)
-   (script-name :initform nil :reader script-name)
-   (query-string :initform nil :reader query-string)
-   (aux-data :initform nil :accessor aux-data)
-   (raw-post-data :initform nil)
-   (tmp-files :initform () :accessor tmp-files)))
+  ((acceptor :initarg :acceptor :reader acceptor) ; request
+   (aux-data :initform nil :accessor aux-data) ; request
+   (close-stream-p :initform t :accessor close-stream-p) ;reply
+   (content-length :reader content-length :initform nil) ; reply
+   (content-stream :initarg :content-stream :accessor content-stream) ; request
+   (content-type :reader content-type) ; reply
+   (cookies-in :initform nil :reader cookies-in) ; request
+   (cookies-out :initform nil :accessor cookies-out) ; reply
+   (external-format :initform *toot-default-external-format* :accessor reply-external-format) ; reply
+   (get-parameters :initform nil :reader get-parameters) ; request
+   (headers-in :initarg :headers-in :reader headers-in) ; request
+   (headers-out :initform nil :reader headers-out) ; reply
+   (headers-sent-p :initform nil :accessor headers-sent-p) ; reply
+   (method :initarg :method :reader request-method) ; request
+   (post-parameters :initform nil :reader post-parameters) ; request
+   (query-string :initform nil :reader query-string) ; request
+   (raw-post-data :initform nil) ; request
+   (remote-addr :initarg :remote-addr :reader remote-addr) ; request
+   (remote-port :initarg :remote-port :reader remote-port) ; request
+   (return-code :initform +http-ok+ :accessor return-code) ; reply
+   (script-name :initform nil :reader script-name) ; request
+   (server-protocol :initarg :server-protocol :reader server-protocol) ; request
+   (tmp-files :initform () :accessor tmp-files) ; request
+   (uri :initarg :uri :reader request-uri) ; request
+   (reply :accessor reply)
+   ))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Formerly defined in reply.lisp.
+
+(defun (setf content-type) (new-value reply)
+  "Sets the outgoing 'Content-Type' http header of REPLY."
+  (setf (header-out :content-type reply) new-value))
+
+(defun (setf content-length) (new-value reply)
+  "Sets the outgoing 'Content-Length' http header of REPLY."
+  (setf (header-out :content-length reply) new-value))
+
+(defun header-out-set-p (name reply)
+  "Returns a true value if the outgoing http header named NAME has
+been specified already.  NAME should be a keyword or a string."
+  (assoc* name (headers-out reply)))
+
+(defun cookie-out (name reply)
+  "Returns the current value of the outgoing cookie named
+NAME. Search is case-sensitive."
+  (cdr (assoc name (cookies-out reply) :test #'string=)))
+
+(defun header-out (name reply)
+  "Returns the current value of the outgoing http header named NAME.
+NAME should be a keyword or a string."
+  (cdr (assoc name (headers-out reply))))
+
+(defun (setf header-out) (new-value name reply)
+  "Changes the current value of the outgoing http
+header named NAME \(a keyword or a string).  If a header with this
+name doesn't exist, it is created."
+  (when (stringp name)
+    (setf name (as-keyword name :destructivep nil)))
+
+  (let ((entry (assoc name (headers-out reply))))
+    (if entry
+        (setf (cdr entry) new-value)
+        (setf (slot-value reply 'headers-out)
+              (acons name new-value (headers-out reply))))
+    new-value)
+
+  (case name
+    (:content-length
+     (check-type new-value integer)
+     (setf (slot-value reply 'content-length) new-value))
+    (:content-type
+     (check-type new-value (or null string))
+     (setf (slot-value reply 'content-type) new-value))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun convert-hack (string external-format)
   "The rfc2388 code is buggy in that it operates on a character stream
@@ -115,6 +174,9 @@ already been read."
   "The only initarg for a REQUEST object is :HEADERS-IN.  All other
 slot values are computed in this :AFTER method."
   (declare (ignore init-args))
+  (setf (reply request) request)  ; temprorary measure
+  (setf (header-out :content-type request) *default-content-type*)
+
   (with-slots (headers-in cookies-in get-parameters script-name query-string)
       request
     (handler-case*
