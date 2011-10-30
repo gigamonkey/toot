@@ -110,3 +110,4 @@ facility."
 (defmethod log-message ((acceptor acceptor) log-level format-string &rest format-arguments)
   (apply #'log-message (message-logger acceptor) log-level format-string format-arguments))
 
+(defvar *default-logger* (make-instance 'stream-logger :destination *error-output*))

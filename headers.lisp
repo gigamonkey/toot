@@ -56,7 +56,7 @@
   (let* ((reply (reply request))
          (return-code (return-code reply))
          (acceptor (acceptor request))
-         (chunkedp (and (acceptor-output-chunking-p acceptor)
+         (chunkedp (and (output-chunking-p acceptor)
                         (eql (server-protocol request) :http/1.1)
                         ;; only turn chunking on if the content
                         ;; length is unknown at this point...
@@ -83,21 +83,21 @@
       (cond 
         (keep-alive-p
          (setf (close-stream-p reply) nil)
-         (when (and (acceptor-read-timeout acceptor)
+         (when (and (read-timeout acceptor)
                     (or (not (eql (server-protocol request) :http/1.1))
                         keep-alive-requested-p))
            ;; persistent connections are implicitly assumed for
            ;; HTTP/1.1, but we return a 'Keep-Alive' header if the
            ;; client has explicitly asked for one
            (setf (header-out :connection reply) "Keep-Alive")
-           (setf (header-out :keep-alive reply) (format nil "timeout=~D" (acceptor-read-timeout acceptor)))))
+           (setf (header-out :keep-alive reply) (format nil "timeout=~D" (read-timeout acceptor)))))
 
         (t (setf (header-out :connection reply) "Close"))))
 
     (unless (and (header-out-set-p :server reply) 
                  (null (header-out :server reply)))
       (setf (header-out :server reply) (or (header-out :server reply)
-                                           (acceptor-server-name acceptor))))
+                                           (format nil "Toot ~A" *toot-version*))))
 
     (setf (header-out :date reply) (rfc-1123-date))
 

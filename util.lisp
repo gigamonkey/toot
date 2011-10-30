@@ -284,7 +284,7 @@ asked for a persistent connection."
 values of the `Connection' header."
              (member value connection-values :test #'string-equal)))
       (let ((keep-alive-requested-p (connection-value-p "keep-alive")))
-        (values (and (acceptor-persistent-connections-p (acceptor request))
+        (values (and (persistent-connections-p (acceptor request))
                      (or (and (eql (server-protocol request) :http/1.1)
                               (not (connection-value-p "close")))
                          (and (eql (server-protocol request) :http/1.0)
@@ -303,12 +303,12 @@ inclusion in HTML output."
             +implementation-link+
             (escape-for-html (lisp-implementation-type))
             (escape-for-html (lisp-implementation-version))
-            (escape-for-html (or (host request) (acceptor-address (acceptor request))))
+            (escape-for-html (or (host request) (address (acceptor request))))
             (scan ":\\d+$" (or (host request) ""))
-            (acceptor-port (acceptor request)))))
+            (port (acceptor request)))))
 
-(defun input-chunking-p (request)
+(defun request-input-chunking-p (request)
   "Whether input chunking is currently switched on for the acceptors
-content stream. N.B. This is different "
+content stream. N.B. This is different than whether the "
   (chunked-stream-input-chunking-p (content-stream request)))
 

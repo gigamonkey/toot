@@ -26,26 +26,23 @@
 
 (in-package :toot)
 
-(defvar *default-logger* (make-instance 'stream-logger :destination *error-output*))
-
 (defclass acceptor ()
-  ((port :initarg :port :reader acceptor-port)
-   (address :initarg :address :reader acceptor-address)
-   (name :initarg :name :accessor acceptor-name)
+  ((port :initarg :port :reader port)
+   (address :initarg :address :reader address)
    (taskmaster :initarg :taskmaster :reader taskmaster)
-   (output-chunking-p :initarg :output-chunking-p :accessor acceptor-output-chunking-p)
-   (input-chunking-p :initarg :input-chunking-p :accessor acceptor-input-chunking-p)
-   (persistent-connections-p :initarg :persistent-connections-p :accessor acceptor-persistent-connections-p)
-   (read-timeout :initarg :read-timeout :reader acceptor-read-timeout)
-   (write-timeout :initarg :write-timeout :reader acceptor-write-timeout)
-   (listen-socket :initform nil :accessor acceptor-listen-socket)
-   (listen-backlog :initarg :listen-backlog :reader acceptor-listen-backlog)
-   (acceptor-shutdown-p :initform t :accessor acceptor-shutdown-p)
+   (output-chunking-p :initarg :output-chunking-p :accessor output-chunking-p)
+   (input-chunking-p :initarg :input-chunking-p :accessor input-chunking-p)
+   (persistent-connections-p :initarg :persistent-connections-p :accessor persistent-connections-p)
+   (read-timeout :initarg :read-timeout :reader read-timeout)
+   (write-timeout :initarg :write-timeout :reader write-timeout)
+   (listen-socket :initform nil :accessor listen-socket)
+   (listen-backlog :initarg :listen-backlog :reader listen-backlog)
+   (shutdown-p :initform t :accessor shutdown-p)
    (requests-in-progress :initform 0 :accessor accessor-requests-in-progress)
-   (shutdown-queue :initform (make-condition-variable) :accessor acceptor-shutdown-queue)
-   (shutdown-lock :initform (make-lock "toot-acceptor-shutdown") :accessor acceptor-shutdown-lock)
-   (access-loggger :initarg :access-logger :accessor access-logger)
-   (message-logger :initarg :message-logger :accessor message-logger)
+   (shutdown-queue :initform (make-condition-variable) :accessor shutdown-queue)
+   (shutdown-lock :initform (make-lock "toot-shutdown") :accessor shutdown-lock)
+   (access-loggger :initarg :access-logger :initform *default-logger* :accessor access-logger)
+   (message-logger :initarg :message-logger :initform *default-logger* :accessor message-logger)
    (ssl-adapter :initarg :ssl-adapter :accessor ssl-adapter)
    (dispatcher :initarg :dispatcher :accessor dispatcher)
    (error-generator :initarg :error-generator :accessor error-generator))
@@ -53,11 +50,8 @@
   (:default-initargs
     :address nil
     :port 80
-    :name (gensym)
     :listen-backlog 50
     :taskmaster (make-instance *default-taskmaster-class*)
-    :access-logger *default-logger*
-    :message-logger *default-logger*
     :output-chunking-p t
     :input-chunking-p t
     :persistent-connections-p t
@@ -69,7 +63,7 @@
 (defmethod print-object ((acceptor acceptor) stream)
   (print-unreadable-object (acceptor stream :type t)
     (format stream "\(host ~A, port ~A)"
-            (or (acceptor-address acceptor) "*") (acceptor-port acceptor))))
+            (or (address acceptor) "*") (port acceptor))))
 
 ;; SSL
 
@@ -104,11 +98,11 @@
 
 (defun start (acceptor)
   (with-accessors 
-        ((listen-socket acceptor-listen-socket)
-         (shutdown-p acceptor-shutdown-p)
-         (address acceptor-address)
-         (port acceptor-port)
-         (listen-backlog acceptor-listen-backlog))
+        ((listen-socket listen-socket)
+         (shutdown-p shutdown-p)
+         (address address)
+         (port port)
+         (listen-backlog listen-backlog))
       acceptor
 
     (when listen-socket
@@ -126,38 +120,37 @@
     acceptor))
 
 (defun stop (acceptor &key soft)
-  (setf (acceptor-shutdown-p acceptor) t)
+  (setf (shutdown-p acceptor) t)
   (shutdown (taskmaster acceptor) acceptor)
   (when soft
-    (with-lock-held ((acceptor-shutdown-lock acceptor))
+    (with-lock-held ((shutdown-lock acceptor))
       ;; FIXME: seems like this should perhaps be a while loop not a
       ;; when? The thread which called STOP is waiting here while all
       ;; the threads processing requests will signal on the
-      ;; acceptor-shutdown-queue
+      ;; shutdown-queue
       (when (plusp (accessor-requests-in-progress acceptor))
-        (condition-variable-wait (acceptor-shutdown-queue acceptor) 
-                                 (acceptor-shutdown-lock acceptor)))))
-  (usocket:socket-close (acceptor-listen-socket acceptor))
-  (setf (acceptor-listen-socket acceptor) nil)
+        (condition-variable-wait (shutdown-queue acceptor) 
+                                 (shutdown-lock acceptor)))))
+  (usocket:socket-close (listen-socket acceptor))
+  (setf (listen-socket acceptor) nil)
   acceptor)
 
-(defun do-with-acceptor-request-count-incremented (acceptor function)
-  (with-lock-held ((acceptor-shutdown-lock acceptor))
+(defun do-with-request-count-incremented (acceptor function)
+  (with-lock-held ((shutdown-lock acceptor))
     (incf (accessor-requests-in-progress acceptor)))
   (unwind-protect
        (funcall function)
-    (with-lock-held ((acceptor-shutdown-lock acceptor))
+    (with-lock-held ((shutdown-lock acceptor))
       (decf (accessor-requests-in-progress acceptor))
-      (when (acceptor-shutdown-p acceptor)
-        (condition-variable-signal (acceptor-shutdown-queue acceptor))))))
+      (when (shutdown-p acceptor)
+        (condition-variable-signal (shutdown-queue acceptor))))))
 
-(defmacro with-acceptor-request-count-incremented ((acceptor) &body body)
-  "Execute BODY with ACCEPTOR-REQUESTS-IN-PROGRESS of ACCEPTOR
-  incremented by one.  If the ACCEPTOR-SHUTDOWN-P returns true after
-  the BODY has been executed, the ACCEPTOR-SHUTDOWN-QUEUE condition
-  variable of the ACCEPTOR is signalled in order to finish shutdown
-  processing."
-  `(do-with-acceptor-request-count-incremented ,acceptor (lambda () ,@body)))
+(defmacro with-request-count-incremented ((acceptor) &body body)
+  "Execute BODY with REQUESTS-IN-PROGRESS of ACCEPTOR
+  incremented by one. If the SHUTDOWN-P returns true after the BODY
+  has been executed, the SHUTDOWN-QUEUE condition variable of the
+  ACCEPTOR is signalled in order to finish shutdown processing."
+  `(do-with-request-count-incremented ,acceptor (lambda () ,@body)))
 
 (defun process-connection (acceptor socket)
   "Called by taskmaster's handle-incoming-connection."
@@ -183,7 +176,7 @@
              ;; down, close-stream-p on the reply is T, or the peer
              ;; fails to send a request
              (loop 
-                (when (acceptor-shutdown-p acceptor) (return))
+                (when (shutdown-p acceptor) (return))
                 
                 (multiple-value-bind (headers-in method url-string protocol)
                     (get-request-data content-stream)
@@ -197,7 +190,7 @@
 
                       (when (member "chunked" transfer-encodings :test #'equalp)
                         (cond 
-                          ((acceptor-input-chunking-p acceptor)
+                          ((input-chunking-p acceptor)
                            ;; turn chunking on before we read the request body
                            (setf content-stream (make-chunked-stream content-stream))
                            (setf (chunked-stream-input-chunking-p content-stream) t))
@@ -206,7 +199,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
 
                     (multiple-value-bind (remote-addr remote-port)
                         (get-peer-address-and-port socket)
-                      (with-acceptor-request-count-incremented (acceptor)
+                      (with-request-count-incremented (acceptor)
                         (process-request (make-instance 'request
                                            :acceptor acceptor
                                            :reply reply
@@ -240,9 +233,9 @@ chunked encoding, but acceptor is configured to not use it.")))))
 
 (defun accept-connections (acceptor)
   "Called by taskmaster's execute-acceptor."
-  (usocket:with-server-socket (listener (acceptor-listen-socket acceptor))
+  (usocket:with-server-socket (listener (listen-socket acceptor))
     (loop
-       (when (acceptor-shutdown-p acceptor) (return))
+       (when (shutdown-p acceptor) (return))
 
        (when (usocket:wait-for-input listener :ready-only t :timeout +new-connection-wait-time+)
          (when-let (client-connection
@@ -250,8 +243,8 @@ chunked encoding, but acceptor is configured to not use it.")))))
                       ;; ignore condition
                       (usocket:connection-aborted-error ())))
            (set-timeouts client-connection
-                         (acceptor-read-timeout acceptor)
-                         (acceptor-write-timeout acceptor))
+                         (read-timeout acceptor)
+                         (write-timeout acceptor))
            (handle-incoming-connection (taskmaster acceptor) acceptor client-connection))))))
 
 (defun handle-request (request)
@@ -286,7 +279,3 @@ SEND-HEADERS has not been called."
 (defun error-page (request &key error backtrace)
   "Generate the body of an error page, using the acceptors error generator."
   (generate-error-page (error-generator (acceptor request)) request :error error :backtrace backtrace))
-
-(defun acceptor-server-name (acceptor)
-  (format nil "Toot ~A (~A)" *toot-version* (acceptor-name acceptor)))
-

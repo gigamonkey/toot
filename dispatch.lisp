@@ -50,7 +50,7 @@
         (error "Boo!")) 
       (unless (safe-filename-p script-name)
         (abort-request-handler request +http-forbidden+))
-      (handle-static-file request (reply request) (resolve-file script-name document-root)))))
+      (serve-file request (reply request) (resolve-file script-name document-root)))))
 
 (defun safe-filename-p (script-name)
   "Verify that a script-name, translated to a file doesn't contain any

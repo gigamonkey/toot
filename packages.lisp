@@ -92,17 +92,18 @@
            #:+http-version-not-supported+
 
            #:abort-request-handler
-           #:acceptor-access-log-destination
-           #:acceptor-address
-           #:acceptor-dispatch-request
-           #:acceptor-input-chunking-p
-           #:acceptor-message-log-destination
-           #:acceptor-name
-           #:acceptor-output-chunking-p
-           #:acceptor-persistent-connections-p
-           #:acceptor-port
-           #:acceptor-read-timeout
-           #:acceptor-write-timeout
+
+           #:port
+           #:address
+           #:taskmaster
+           #:output-chunking-p
+           #:input-chunking-p
+           #:persistent-connections-p
+           #:read-timeout
+           #:write-timeout
+           #:access-logger
+           #:message-logger
+
            #:authorization
            #:aux-request-value
            #:content-length
@@ -195,7 +196,6 @@
            #:ssl-p
            #:start
            #:stop
-           #:taskmaster
            #:thread-per-connection-taskmaster
            #:url-decode
            #:url-encode

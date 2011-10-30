@@ -227,8 +227,7 @@ is set up via PROCESS-REQUEST."
            "Error while creating worker thread for new incoming connection: ~A" cond))))
 
 (defun listen-thread-name (acceptor)
-  (with-accessors ((address acceptor-address) (port acceptor-port)) acceptor
-    (format nil "toot-listener-~A:~A" (or address "*") port)))
+  (format nil "toot-listener-~A:~A" (or (address acceptor) "*") (port acceptor)))
 
 (defun connection-handler-thread-name (taskmaster socket)
   (let ((address (usocket:get-peer-address socket))
