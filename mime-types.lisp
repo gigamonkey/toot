@@ -355,4 +355,4 @@ of file suffixes for the corresponding type.")
   "A hash table which maps file suffixes to MIME types.")
 
 (defun guess-mime-type (extension)
-  (gethash extension *mime-type-hash*) "application/octet-stream")
+  (or (gethash extension *mime-type-hash*) "application/octet-stream"))
