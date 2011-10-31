@@ -83,6 +83,8 @@ referer
 send-headers — causes the HTTP headers to be sent and returns a stream
 to which the body of the reply can be written.
 
+set-cookie
+
 (setf return-code)
 
 (setf content-length)

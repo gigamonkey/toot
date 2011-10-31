@@ -70,7 +70,19 @@
 (defmethod log-message ((acceptor acceptor) log-level format-string &rest format-arguments)
   (apply #'log-message (message-logger acceptor) log-level format-string format-arguments))
 
-;; SSL
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Generic functions to be implemented by users to customize the server.
+
+(defgeneric handle-request (handler request)
+  (:documentation "Used by the acceptor to handle a request."))
+
+(defgeneric generate-error-page (generator request &key error backtrace)
+  (:documentation "Used by acceptor to generate an error page for a
+  request based on the http status code."))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; SSL
 
 (defclass ssl-adapter ()
   ((ssl-certificate-file :initarg :ssl-certificate-file :reader ssl-certificate-file)

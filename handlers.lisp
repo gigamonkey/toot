@@ -27,25 +27,17 @@
 (in-package :toot)
 
 (defmacro maybe-handle (test &body body)
+  "Handle the request with BODY if TEST is true. Otherwise return
+'NOT-HANDLED."
   `(cond
      (,test ,@body)
      (t 'not-handled)))
 
-
-(defgeneric handle-request (handler request)
-  (:documentation "Used by the acceptor to handle a request."))
-
-(defgeneric generate-error-page (generator request &key error backtrace)
-  (:documentation "Used by acceptor to generate an error page for a
-  request based on the http status code."))
-
-;;; Use functions as handlers and error page generators
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Function as a handler
 
 (defmethod handle-request ((handler function) request)
   (funcall handler request))
-
-(defmethod generate-error-page ((generator function) request &key error backtrace)
-  (funcall generator request error backtrace))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Static file handler
@@ -129,8 +121,11 @@ file name of the request is exactyl the given PATH."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Error page generation
 
+(defmethod generate-error-page ((generator function) request &key error backtrace)
+  (funcall generator request error backtrace))
+
 (defun default-error-message-generator (request error backtrace)
-  "Generate a bare-bones error page."
+  "A function that generates a bare-bones error page to be used as an error page generator."
   (let ((status-code (return-code request)))
     (with-output-to-string (s)
       (format s "<html><head><title>~d: ~a</title></head><body><h1>~2:*~d: ~a</h1></body></html>"

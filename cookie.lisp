@@ -43,6 +43,7 @@
   (call-next-method))
 
 (defun set-cookie (name request &key (value "") expires path domain secure http-only)
+  "Set a cookie to be sent with the reply."
   (let ((place (assoc name (cookies-out request) :test #'string=))
         (cookie (make-instance 'cookie
                   :name name
