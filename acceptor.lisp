@@ -26,6 +26,8 @@
 
 (in-package :toot)
 
+(defvar *default-logger* (make-instance 'stream-logger :destination *error-output*))
+
 (defclass acceptor ()
   ((port :initarg :port :reader port)
    (address :initarg :address :reader address)
@@ -64,6 +66,9 @@
   (print-unreadable-object (acceptor stream :type t)
     (format stream "\(host ~A, port ~A)"
             (or (address acceptor) "*") (port acceptor))))
+
+(defmethod log-message ((acceptor acceptor) log-level format-string &rest format-arguments)
+  (apply #'log-message (message-logger acceptor) log-level format-string format-arguments))
 
 ;; SSL
 
@@ -163,8 +168,8 @@
       (let ((content-stream (make-socket-stream socket acceptor)))
         (unwind-protect
              ;; process requests until either the acceptor is shut
-             ;; down, close-stream-p on the reply is T, or the peer
-             ;; fails to send a request
+             ;; down, close-stream-p on the most recent request is T,
+             ;; or the peer fails to send a request
              (loop 
                 (when (shutdown-p acceptor) (return))
                 
@@ -249,8 +254,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
           (lambda (cond)
             ;; if the headers were already sent, the error happened
             ;; within the body and we have to close the stream
-            (let ((reply (reply request)))
-              (when (headers-sent-p reply) (setf (close-stream-p reply) t)))
+            (when (headers-sent-p request) (setf (close-stream-p request) t))
             (throw 'handler-done (values nil cond (get-backtrace)))))
          (warning
           (lambda (cond)
@@ -263,7 +267,7 @@ chunked encoding, but acceptor is configured to not use it.")))))
   "Abort the handling of a request, sending instead a response with
 the given response-status-code. A request can only be aborted if
 SEND-HEADERS has not been called."
-  (setf (return-code (reply request)) response-status-code)
+  (setf (return-code request) response-status-code)
   (throw 'handler-done body))
 
 (defun error-page (request &key error backtrace)

@@ -27,82 +27,87 @@
 (in-package :toot)
 
 (defclass request ()
-  ((acceptor :initarg :acceptor :reader acceptor) ; request
-   (aux-data :initform nil :accessor aux-data) ; request
-   (close-stream-p :initform t :accessor close-stream-p) ;reply
-   (content-length :reader content-length :initform nil) ; reply
-   (content-stream :initarg :content-stream :accessor content-stream) ; request
-   (content-type :reader content-type) ; reply
-   (cookies-in :initform nil :reader cookies-in) ; request
-   (cookies-out :initform nil :accessor cookies-out) ; reply
-   (external-format :initform *toot-default-external-format* :accessor reply-external-format) ; reply
-   (get-parameters :initform nil :reader get-parameters) ; request
-   (headers-in :initarg :headers-in :reader headers-in) ; request
-   (headers-out :initform nil :reader headers-out) ; reply
-   (headers-sent-p :initform nil :accessor headers-sent-p) ; reply
-   (method :initarg :method :reader request-method) ; request
-   (post-parameters :initform nil :reader post-parameters) ; request
-   (query-string :initform nil :reader query-string) ; request
-   (raw-post-data :initform nil) ; request
-   (remote-addr :initarg :remote-addr :reader remote-addr) ; request
-   (remote-port :initarg :remote-port :reader remote-port) ; request
-   (return-code :initform +http-ok+ :accessor return-code) ; reply
-   (script-name :initform nil :reader script-name) ; request
-   (server-protocol :initarg :server-protocol :reader server-protocol) ; request
-   (tmp-files :initform () :accessor tmp-files) ; request
-   (uri :initarg :uri :reader request-uri) ; request
-   (reply :accessor reply)
+  (
+   ;; Information about the request itself
+   (remote-addr :initarg :remote-addr :reader remote-addr)
+   (remote-port :initarg :remote-port :reader remote-port)
+   (script-name :initform nil :reader script-name)
+   (method :initarg :method :reader request-method)
+   (query-string :initform nil :reader query-string)
+   (get-parameters :initform nil :reader get-parameters)
+   (post-parameters :initform nil :reader post-parameters)
+   (raw-post-data :initform nil)
+   (server-protocol :initarg :server-protocol :reader server-protocol)
+   (uri :initarg :uri :reader request-uri)
+   (headers-in :initarg :headers-in :reader headers-in)
+   (cookies-in :initform nil :reader cookies-in)
+
+   ;; Information used in generating the reply
+   (return-code :initform +http-ok+ :accessor return-code)
+   (content-length :reader content-length :initform nil)
+   (content-type :reader content-type)
+   (external-format :initform *default-external-format* :accessor external-format)
+   (headers-out :initform nil :reader headers-out)
+   (cookies-out :initform nil :accessor cookies-out)
+
+   ;; Lifecycle control
+   (headers-sent-p :initform nil :accessor headers-sent-p)
+   (close-stream-p :initform t :accessor close-stream-p)
+
+   ;; Internal foo
+   (acceptor :initarg :acceptor :reader acceptor)
+   (content-stream :initarg :content-stream :accessor content-stream)
+   (tmp-files :initform () :accessor tmp-files)
+   (aux-data :initform nil :accessor aux-data)
    ))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Formerly defined in reply.lisp.
+(defmethod log-message ((request request) log-level format-string &rest format-arguments)
+  (apply #'log-message (acceptor request) log-level format-string format-arguments))
 
-(defun (setf content-type) (new-value reply)
-  "Sets the outgoing 'Content-Type' http header of REPLY."
-  (setf (header-out :content-type reply) new-value))
+(defun (setf content-type) (new-value request)
+  "Sets the outgoing 'Content-Type' http header of REQUEST."
+  (setf (header-out :content-type request) new-value))
 
-(defun (setf content-length) (new-value reply)
-  "Sets the outgoing 'Content-Length' http header of REPLY."
-  (setf (header-out :content-length reply) new-value))
+(defun (setf content-length) (new-value request)
+  "Sets the outgoing 'Content-Length' http header of REQUEST."
+  (setf (header-out :content-length request) new-value))
 
-(defun header-out-set-p (name reply)
+(defun header-out-set-p (name request)
   "Returns a true value if the outgoing http header named NAME has
 been specified already.  NAME should be a keyword or a string."
-  (assoc* name (headers-out reply)))
+  (assoc* name (headers-out request)))
 
-(defun cookie-out (name reply)
+(defun cookie-out (name request)
   "Returns the current value of the outgoing cookie named
 NAME. Search is case-sensitive."
-  (cdr (assoc name (cookies-out reply) :test #'string=)))
+  (cdr (assoc name (cookies-out request) :test #'string=)))
 
-(defun header-out (name reply)
+(defun header-out (name request)
   "Returns the current value of the outgoing http header named NAME.
 NAME should be a keyword or a string."
-  (cdr (assoc name (headers-out reply))))
+  (cdr (assoc name (headers-out request))))
 
-(defun (setf header-out) (new-value name reply)
+(defun (setf header-out) (new-value name request)
   "Changes the current value of the outgoing http
 header named NAME \(a keyword or a string).  If a header with this
 name doesn't exist, it is created."
   (when (stringp name)
     (setf name (as-keyword name :destructivep nil)))
 
-  (let ((entry (assoc name (headers-out reply))))
+  (let ((entry (assoc name (headers-out request))))
     (if entry
         (setf (cdr entry) new-value)
-        (setf (slot-value reply 'headers-out)
-              (acons name new-value (headers-out reply))))
+        (setf (slot-value request 'headers-out)
+              (acons name new-value (headers-out request))))
     new-value)
 
   (case name
     (:content-length
      (check-type new-value integer)
-     (setf (slot-value reply 'content-length) new-value))
+     (setf (slot-value request 'content-length) new-value))
     (:content-type
      (check-type new-value (or null string))
-     (setf (slot-value reply 'content-type) new-value))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     (setf (slot-value request 'content-type) new-value))))
 
 (defun convert-hack (string external-format)
   "The rfc2388 code is buggy in that it operates on a character stream
@@ -174,7 +179,6 @@ already been read."
   "The only initarg for a REQUEST object is :HEADERS-IN.  All other
 slot values are computed in this :AFTER method."
   (declare (ignore init-args))
-  (setf (reply request) request)  ; temprorary measure
   (setf (header-out :content-type request) *default-content-type*)
 
   (with-slots (headers-in cookies-in get-parameters script-name query-string)
@@ -203,7 +207,7 @@ slot values are computed in this :AFTER method."
       (error (condition)
         (log-message request :error "Error when creating REQUEST object: ~A" condition)
         ;; we assume it's not our fault...
-        (setf (return-code (reply request)) +http-bad-request+)))))
+        (setf (return-code request) +http-bad-request+)))))
 
 (defun process-request (request)
   ;; used by HTTP HEAD handling to end request processing in a HEAD
@@ -221,7 +225,7 @@ slot values are computed in this :AFTER method."
            ;; clean up. Otherwise, if the return-code is one that
            ;; needs an error message we generate that or we return the
            ;; string returned by the handler as the body of the reply.
-           (unless (headers-sent-p (reply request))
+           (unless (headers-sent-p request)
              (handler-case
                  (with-debugger
                    ;;; I've reversed things here: if the handler
@@ -237,7 +241,7 @@ slot values are computed in this :AFTER method."
 (defun report-error-to-client (request error &optional backtrace)
   (when *log-lisp-errors-p*
     (log-message request *lisp-errors-log-level* "~A~@[~%~A~]" error (when *log-lisp-backtraces-p* backtrace)))
-  (setf (return-code (reply request)) +http-internal-server-error+)
+  (setf (return-code request) +http-internal-server-error+)
   (start-output
    request
    (error-page request :error error :backtrace backtrace)))
@@ -270,15 +274,15 @@ alist or NIL if there was no data or the data could not be parsed."
       nil)))
 
 (defun maybe-read-post-parameters (request &key force external-format)
-  "Make surce that any POST parameters in the REQUEST are parsed.  The
+  "Make surce that any POST parameters in the REQUEST are parsed. The
 body of the request must be either application/x-www-form-urlencoded
 or multipart/form-data to be considered as containing POST parameters.
-If FORCE is true, parsing is done unconditionally.  Otherwise, parsing
+If FORCE is true, parsing is done unconditionally. Otherwise, parsing
 will only be done if the RAW-POST-DATA slot in the REQUEST is false.
 EXTERNAL-FORMAT specifies the external format of the data in the
-request body.  By default, the encoding is determined from the
-Content-Type header of the request or from
-*TOOT-DEFAULT-EXTERNAL-FORMAT* if none is found."
+request body. By default, the encoding is determined from the
+Content-Type header of the request or from *DEFAULT-EXTERNAL-FORMAT*
+if none is found."
   (when (and (header-in :content-type request)
              (member (request-method request) *methods-for-post-parameters* :test #'eq)
              (or force
@@ -301,7 +305,7 @@ no Content-Length header and input chunking is off.")
                                            (toot-warn "Ignoring ~
 unknown character set ~A in request content type."
                                                  charset))))
-                                     *toot-default-external-format*)))
+                                     *default-external-format*)))
             (setf (slot-value request 'post-parameters)
                   (cond ((and (string-equal type "application")
                               (string-equal subtype "x-www-form-urlencoded"))
@@ -317,10 +321,10 @@ unknown character set ~A in request content type."
         ;; this is not the right thing to do because it could happen
         ;; that we aren't finished reading from the request stream and
         ;; can't send a reply - to be revisited
-        (setf (close-stream-p (reply request)) t)
+        (setf (close-stream-p request) t)
         (abort-request-handler request +http-bad-request+)))))
 
-(defun recompute-request-parameters (request &key (external-format *toot-default-external-format*))
+(defun recompute-request-parameters (request &key (external-format *default-external-format*))
   "Recomputes the GET and POST parameters for the REQUEST object
 REQUEST.  This only makes sense if you're switching external formats
 during the request."
@@ -428,12 +432,12 @@ returned."
 
 (defun raw-post-data (request &key external-format force-text force-binary want-stream)
   "Returns the content sent by the client if there was any \(unless
-the content type was \"multipart/form-data\").  By default, the result
+the content type was \"multipart/form-data\"). By default, the result
 is a string if the type of the `Content-Type' media type is \"text\",
-and a vector of octets otherwise.  In the case of a string, the
+and a vector of octets otherwise. In the case of a string, the
 external format to be used to decode the content will be determined
 from the `charset' parameter sent by the client \(or otherwise
-*TOOT-DEFAULT-EXTERNAL-FORMAT* will be used).
+*DEFAULT-EXTERNAL-FORMAT* will be used).
 
 You can also provide an external format explicitly \(through
 EXTERNAL-FORMAT) in which case the result will unconditionally be a
@@ -461,7 +465,7 @@ content even if the request method is not POST."
   (unless (or external-format force-binary)
     (setf external-format (or (external-format-from-content-type (header-in :content-type request))
                               (when force-text
-                                *toot-default-external-format*))))
+                                *default-external-format*))))
   (let ((raw-post-data (or (slot-value request 'raw-post-data)
                            (get-post-data request :want-stream want-stream))))
     (cond ((typep raw-post-data 'stream) raw-post-data)

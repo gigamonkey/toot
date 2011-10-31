@@ -53,14 +53,13 @@
       content-type))
 
 (defun start-output (request &optional (content nil content-provided-p))
-  (let* ((reply (reply request))
-         (return-code (return-code reply))
+  (let* ((return-code (return-code request))
          (acceptor (acceptor request))
          (chunkedp (and (output-chunking-p acceptor)
                         (eql (server-protocol request) :http/1.1)
                         ;; only turn chunking on if the content
                         ;; length is unknown at this point...
-                        (null (or (content-length reply) content-provided-p))))
+                        (null (or (content-length request) content-provided-p))))
          (request-method (request-method request))
          (head-request-p (eql request-method :head)))
 
@@ -73,56 +72,56 @@
               ;; is no content)
               (or chunkedp
                   head-request-p
-                  (eql (return-code reply) +http-not-modified+)
-                  (content-length reply)
+                  (eql (return-code request) +http-not-modified+)
+                  (content-length request)
                   content)))
       ;; now set headers for keep-alive and chunking
       (when chunkedp
-        (setf (header-out :transfer-encoding reply) "chunked"))
+        (setf (header-out :transfer-encoding request) "chunked"))
 
       (cond 
         (keep-alive-p
-         (setf (close-stream-p reply) nil)
+         (setf (close-stream-p request) nil)
          (when (and (read-timeout acceptor)
                     (or (not (eql (server-protocol request) :http/1.1))
                         keep-alive-requested-p))
            ;; persistent connections are implicitly assumed for
            ;; HTTP/1.1, but we return a 'Keep-Alive' header if the
            ;; client has explicitly asked for one
-           (setf (header-out :connection reply) "Keep-Alive")
-           (setf (header-out :keep-alive reply) (format nil "timeout=~D" (read-timeout acceptor)))))
+           (setf (header-out :connection request) "Keep-Alive")
+           (setf (header-out :keep-alive request) (format nil "timeout=~D" (read-timeout acceptor)))))
 
-        (t (setf (header-out :connection reply) "Close"))))
+        (t (setf (header-out :connection request) "Close"))))
 
-    (unless (and (header-out-set-p :server reply) 
-                 (null (header-out :server reply)))
-      (setf (header-out :server reply) (or (header-out :server reply)
-                                           (format nil "Toot ~A" *toot-version*))))
+    (unless (and (header-out-set-p :server request) 
+                 (null (header-out :server request)))
+      (setf (header-out :server request) (or (header-out :server request)
+                                             (format nil "Toot ~A" *toot-version*))))
 
-    (setf (header-out :date reply) (rfc-1123-date))
+    (setf (header-out :date request) (rfc-1123-date))
 
     (when (stringp content)
       ;; if the content is a string, convert it to the proper external format
-      (setf content (string-to-octets content :external-format (reply-external-format reply)))
-      (setf (content-type reply) (maybe-add-charset-to-content-type-header 
-                                  (content-type reply)
-                                  (reply-external-format reply))))
+      (setf content (string-to-octets content :external-format (external-format request)))
+      (setf (content-type request) (maybe-add-charset-to-content-type-header 
+                                    (content-type request)
+                                    (external-format request))))
     (when content
       ;; whenever we know what we're going to send out as content, set
       ;; the Content-Length header properly; maybe the user specified
       ;; a different content length, but that will be wrong anyway
-      (setf (header-out :content-length reply) (length content)))
+      (setf (header-out :content-length request) (length content)))
 
     ;; send headers only once
-    (when (headers-sent-p reply) (return-from start-output))
+    (when (headers-sent-p request) (return-from start-output))
 
-    (setf (headers-sent-p reply) t)
+    (setf (headers-sent-p request) t)
     (send-response 
      request
      (content-stream request)
      return-code
-     :headers (headers-out reply)
-     :cookies (cookies-out reply)
+     :headers (headers-out request)
+     :cookies (cookies-out request)
      :content (unless head-request-p content))
 
     ;; when processing a HEAD request, exit to return from PROCESS-REQUEST
@@ -136,36 +135,35 @@
     (content-stream request)))
 
 (defun send-response (request stream status-code &key headers cookies content)
-  (let ((reply (reply request)))
-    (when content
-      (setf (content-length reply) (length content)))
-    (when (content-length reply)
-      (if (assoc :content-length headers)
-          (setf (cdr (assoc :content-length headers)) (content-length reply))
-          (push (cons :content-length (content-length reply)) headers)))
-    ;; access log message
-    (log-access (access-logger (acceptor request)) request)
-    ;; Read post data to clear stream - Force binary mode to avoid OCTETS-TO-STRING overhead.
-    (raw-post-data request :force-binary t)
-    (let* ((client-header-stream (flex:make-flexi-stream stream :external-format :iso-8859-1))
-           (header-stream (if *header-stream*
-                              (make-broadcast-stream *header-stream* client-header-stream)
-                              client-header-stream)))
-      ;; start with status line
-      (format header-stream "HTTP/1.1 ~D ~A~C~C" status-code (reason-phrase status-code) #\Return #\Linefeed)
-      ;; write all headers from the REPLY object
-      (loop for (key . value) in headers
-         when value
-         do (write-header-line (as-capitalized-string key) value header-stream))
-      ;; now the cookies
-      (loop for (nil . cookie) in cookies
-         do (write-header-line "Set-Cookie" (stringify-cookie cookie) header-stream))
-      (format header-stream "~C~C" #\Return #\Linefeed))
-    ;; now optional content
-    (when content
-      (write-sequence content stream)
-      (finish-output stream))
-    stream))
+  (when content
+    (setf (content-length request) (length content)))
+  (when (content-length request)
+    (if (assoc :content-length headers)
+        (setf (cdr (assoc :content-length headers)) (content-length request))
+        (push (cons :content-length (content-length request)) headers)))
+  ;; access log message
+  (log-access (access-logger (acceptor request)) request)
+  ;; Read post data to clear stream - Force binary mode to avoid OCTETS-TO-STRING overhead.
+  (raw-post-data request :force-binary t)
+  (let* ((client-header-stream (flex:make-flexi-stream stream :external-format :iso-8859-1))
+         (header-stream (if *header-stream*
+                            (make-broadcast-stream *header-stream* client-header-stream)
+                            client-header-stream)))
+    ;; start with status line
+    (format header-stream "HTTP/1.1 ~D ~A~C~C" status-code (reason-phrase status-code) #\Return #\Linefeed)
+    ;; write all headers
+    (loop for (key . value) in headers
+       when value
+       do (write-header-line (as-capitalized-string key) value header-stream))
+    ;; now the cookies
+    (loop for (nil . cookie) in cookies
+       do (write-header-line "Set-Cookie" (stringify-cookie cookie) header-stream))
+    (format header-stream "~C~C" #\Return #\Linefeed))
+  ;; now optional content
+  (when content
+    (write-sequence content stream)
+    (finish-output stream))
+  stream)
 
 (defun quick-send-response (stream status-code)
   (let ((headers `((:content-length . 0))))
@@ -180,7 +178,7 @@
                               client-header-stream)))
       ;; start with status line
       (format header-stream "HTTP/1.1 ~D ~A~C~C" status-code (reason-phrase status-code) #\Return #\Linefeed)
-      ;; write all headers from the REPLY object
+      ;; write all headers
       (loop for (key . value) in headers
          when value
          do (write-header-line (as-capitalized-string key) value header-stream))
@@ -188,7 +186,9 @@
     (finish-output stream)
     (close stream)))
 
-(defun send-headers (request) (start-output request))
+(defun send-headers (request)
+  "Send the headers and return a stream to which the body of the reply can be written."
+  (start-output request))
 
 (defun read-initial-request-line (stream)
   (handler-case

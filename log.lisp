@@ -1,4 +1,3 @@
-
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz.  All rights reserved.
 
 ;;; Redistribution and use in source and binary forms, with or without
@@ -80,23 +79,21 @@ facility."
    (lock :initform (make-lock "log-lock") :reader lock)))
 
 (defmethod  log-access ((logger stream-logger) request)
-  (let* ((reply (reply request))
-         (return-code (return-code reply)))
-    (with-log-stream (stream (destination logger) (lock logger))
-      (format stream "~:[-~@[ (~A)~]~;~:*~A~@[ (~A)~]~] ~:[-~;~:*~A~] [~A] \"~A ~A~@[?~A~] ~
+  (with-log-stream (stream (destination logger) (lock logger))
+    (format stream "~:[-~@[ (~A)~]~;~:*~A~@[ (~A)~]~] ~:[-~;~:*~A~] [~A] \"~A ~A~@[?~A~] ~
                     ~A\" ~D ~:[-~;~:*~D~] \"~:[-~;~:*~A~]\" \"~:[-~;~:*~A~]\"~%"
-              (remote-addr request)
-              (header-in :x-forwarded-for request)
-              (authorization request)
-              (iso-time)
-              (request-method request)
-              (script-name request)
-              (query-string request)
-              (server-protocol request)
-              return-code
-              (content-length reply)
-              (referer request)
-              (user-agent request)))))
+            (remote-addr request)
+            (header-in :x-forwarded-for request)
+            (authorization request)
+            (iso-time)
+            (request-method request)
+            (script-name request)
+            (query-string request)
+            (server-protocol request)
+            (return-code request)
+            (content-length request)
+            (referer request)
+            (user-agent request))))
 
 (defmethod log-message ((logger stream-logger) log-level format-string &rest format-arguments)
   (with-log-stream (stream (destination logger) (lock logger))
@@ -104,10 +101,3 @@ facility."
             (iso-time) log-level
             format-string format-arguments)))
 
-(defmethod log-message ((request request) log-level format-string &rest format-arguments)
-  (apply #'log-message (acceptor request) log-level format-string format-arguments))
-
-(defmethod log-message ((acceptor acceptor) log-level format-string &rest format-arguments)
-  (apply #'log-message (message-logger acceptor) log-level format-string format-arguments))
-
-(defvar *default-logger* (make-instance 'stream-logger :destination *error-output*))

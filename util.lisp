@@ -176,7 +176,7 @@ The macro also uses SETF to store the new vector in VECTOR."
                                                `(aref ,vector i)))
                finally (return new-vector))))
 
-(defun url-decode (string &optional (external-format *toot-default-external-format*))
+(defun url-decode (string &optional (external-format *default-external-format*))
   "Decodes a URL-encoded STRING which is assumed to be encoded using
 the external format EXTERNAL-FORMAT."
   (when (zerop (length string))
@@ -221,7 +221,7 @@ the external format EXTERNAL-FORMAT."
           (t (octets-to-string vector :external-format external-format)))))
 
 (defun form-url-encoded-list-to-alist (form-url-encoded-list
-                                       &optional (external-format *toot-default-external-format*))
+                                       &optional (external-format *default-external-format*))
   "Converts a list FORM-URL-ENCODED-LIST of name/value pairs into an
 alist.  Both names and values are url-decoded while doing this."
   (mapcar #'(lambda (entry)
@@ -231,7 +231,7 @@ alist.  Both names and values are url-decoded while doing this."
                       (url-decode (or value "") external-format))))
           form-url-encoded-list))
 
-(defun url-encode (string &optional (external-format *toot-default-external-format*))
+(defun url-encode (string &optional (external-format *default-external-format*))
   "URL-encodes a string using the external format EXTERNAL-FORMAT."
   (with-output-to-string (s)
     (loop for c across string

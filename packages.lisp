@@ -36,7 +36,7 @@
            #:*default-content-type*
            #:*file-upload-hook*
            #:*header-stream*
-           #:*toot-default-external-format*
+           #:*default-external-format*
            #:*lisp-errors-log-level*
            #:*lisp-warnings-log-level*
            #:*log-lisp-backtraces-p*
@@ -107,9 +107,7 @@
            #:authorization
            #:aux-request-value
            #:content-length
-           #:content-length*
            #:content-type
-           #:content-type*
            #:cookie-domain
            #:cookie-expires
            #:cookie-http-only
@@ -120,9 +118,7 @@
            #:cookie-secure
            #:cookie-value
            #:cookies-in
-           #:cookies-in*
            #:cookies-out
-           #:cookies-out*
            #:create-folder-dispatcher-and-handler
            #:create-prefix-dispatcher
            #:create-regex-dispatcher
@@ -135,16 +131,12 @@
            #:escape-for-html
            #:get-parameter
            #:get-parameters
-           #:get-parameters*
            #:handle-if-modified-since
            #:serve-file
            #:header-in
-           #:header-in*
            #:header-out
            #:headers-in
-           #:headers-in*
            #:headers-out
-           #:headers-out*
            #:host
            #:http-token-p
            #:toot-condition
@@ -158,11 +150,9 @@
            #:parameter-error
            #:post-parameter
            #:post-parameters
-           #:post-parameters*
            #:process-connection
            #:process-request
            #:query-string
-           #:query-string*
            #:raw-post-data
            #:real-remote-addr
            #:reason-phrase
@@ -170,26 +160,17 @@
            #:redirect
            #:referer
            #:remote-addr
-           #:remote-addr*
            #:remote-port
-           #:remote-port*
-           #:reply
-           #:reply-external-format
-           #:reply-external-format*
+           #:external-format
            #:request
            #:request-method
-           #:request-method*
            #:request-uri
-           #:request-uri*
            #:require-authorization
            #:return-code
-           #:return-code*
            #:rfc-1123-date
            #:script-name
-           #:script-name*
            #:send-headers
            #:server-protocol
-           #:server-protocol*
            #:set-cookie
            #:shutdown
            #:single-threaded-taskmaster

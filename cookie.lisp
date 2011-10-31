@@ -43,8 +43,8 @@
       (parameter-error "~S is not a legal name for a cookie." name)))
   (call-next-method))
 
-(defun set-cookie (name reply &key (value "") expires path domain secure http-only)
-  (let ((place (assoc name (cookies-out reply) :test #'string=))
+(defun set-cookie (name request &key (value "") expires path domain secure http-only)
+  (let ((place (assoc name (cookies-out request) :test #'string=))
         (cookie (make-instance 'cookie
                    :name name
                    :value value
@@ -55,7 +55,7 @@
                    :http-only http-only)))
     (cond
       (place (setf (cdr place) cookie))
-      (t (push (cons name cookie) (cookies-out reply))))
+      (t (push (cons name cookie) (cookies-out request))))
     cookie))
 
 (defun cookie-date (universal-time)

@@ -192,7 +192,7 @@ output of binary data.")
   "A FLEXI-STREAMS external format used internally for logging and to
 encode cookie values.")
 
-(defvar *toot-default-external-format* +utf-8+
+(defvar *default-external-format* +utf-8+
   "The external format used to compute the REQUEST object.")
 
 (defconstant +buffer-length+ 8192

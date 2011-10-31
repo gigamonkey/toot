@@ -50,7 +50,7 @@
         (error "Boo!")) 
       (unless (safe-filename-p script-name)
         (abort-request-handler request +http-forbidden+))
-      (serve-file request (reply request) (resolve-file script-name document-root)))))
+      (serve-file request (resolve-file script-name document-root)))))
 
 (defun safe-filename-p (script-name)
   "Verify that a script-name, translated to a file doesn't contain any
@@ -73,7 +73,7 @@ tricky bits such as '..'"
 
 (defun default-error-message-generator (request error backtrace)
   "Generate a bare-bones error page."
-  (let ((status-code (return-code (reply request))))
+  (let ((status-code (return-code request)))
     (with-output-to-string (s)
       (format s "<html><head><title>~d: ~a</title></head><body><h1>~2:*~d: ~a</h1></body></html>"
               status-code (reason-phrase status-code))
