@@ -39,7 +39,8 @@ output.")
 (defsystem :toot
   :serial t
   :version #.*toot-version*
-  :depends-on (:chunga
+  :depends-on (:alexandria
+               :chunga
                :cl-base64
                :cl-fad
                :cl-ppcre
@@ -51,7 +52,6 @@ output.")
                :bordeaux-threads)
   :components ((:file "packages")
                (:file "rfc2388")
-               (:file "compat")
                (:file "specials")
                (:file "conditions")
                (:file "mime-types")

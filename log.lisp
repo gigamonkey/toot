@@ -43,7 +43,7 @@ with high throughput demands should make use of a specialized logging
 function rather than relying on Toot's default logging
 facility."
   (with-unique-names (binary-stream)
-    (with-rebinding (destination)
+    (once-only (destination)
       (let ((body body))
         `(when ,destination
            (with-lock-held (,lock)
