@@ -431,18 +431,6 @@ same name exist the GET parameter is returned.  Search is
 case-sensitive."
   (or (get-parameter name request) (post-parameter name request)))
 
-(defun handle-if-modified-since (time request)
-  "Handles the 'If-Modified-Since' header of REQUEST.  The date string
-is compared to the one generated from the supplied universal time
-TIME."
-  (let ((if-modified-since (header-in :if-modified-since request))
-        (time-string (rfc-1123-date time)))
-    ;; simple string comparison is sufficient; see RFC 2616 14.25
-    (when (and if-modified-since
-               (equal if-modified-since time-string))
-      (abort-request-handler request +http-not-modified+))
-    (values)))
-
 (defun external-format-from-content-type (content-type)
   "Creates and returns an external format corresponding to the value
 of the content type header provided in CONTENT-TYPE.  If the content

@@ -56,9 +56,11 @@ method
 
 query-string
 
-get-parameters
+get-parameter
 
-post-parameters
+post-parameter
+
+parameter 
 
 header-in
 
@@ -74,17 +76,12 @@ host
 
 user-agent
 
-cookie-in
-
 referer
 
-get-parameter
-
-post-parameter
-
-parameter
-
 ** For controlling reply — low level
+
+send-headers — causes the HTTP headers to be sent and returns a stream
+to which the body of the reply can be written.
 
 (setf return-code)
 
@@ -98,21 +95,20 @@ parameter
 
 ** For controlling reply — high-level
 
-send-headers — causes the HTTP headers to be sent and returns a stream
-to which the body of the reply can be written.
-
-\code{redirect} — send a redirect rather than generating a reply.
-
-no-cache — add headers to the reply which should prevent caching by the browser.
-
 serve-file — serve up a specific file. Handles if-modified-since and
 guesses at content-type based on extension if not supplied. Sends 404:
 Not found reply if file does not exist.
 
+no-cache — add headers to the reply which should prevent caching by
+the browser.
+
+redirect — send a redirect rather than generating a reply.
+
+require-authorization — sends headers requiring basic HTTP
+authentication.
+
 handle-if-modified-since — send a Not Modified reply if the time
 provided is the same as the time provided in the request.
-
-require-authorization — sends headers requiring basic HTTP authentication.
 
 ** Misc
 

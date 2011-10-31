@@ -65,38 +65,6 @@ if-modified-since request appropriately."
                (decf bytes-to-send chunk-size)))
           (finish-output out))))))
 
-(defun maybe-handle-range-header (request file)
-  "Helper function for serve-file. Determines whether the requests
-  specifies a Range header. If so, parses the header and position the
-  already opened file to the location specified. Returns the number of
-  bytes to transfer from the file. Invalid specified ranges are
-  reported to the client with a HTTP 416 status code."
-  (let ((bytes-to-send (file-length file)))
-    (cl-ppcre:register-groups-bind
-        (start end)
-        ("^bytes (\\d+)-(\\d+)$" (header-in :range request) :sharedp t)
-      ;; body won't be executed if regular expression does not match
-      (setf start (parse-integer start)
-            end (parse-integer end))
-      (when (or (< start 0)
-                (>= end (file-length file)))
-        (setf (header-out :content-range request) (format nil "bytes 0-~D/*" (1- (file-length file))))
-        (abort-request-handler
-         request
-         +http-requested-range-not-satisfiable+
-         (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
-                 start end (1- (file-length file)))))
-      (file-position file start)
-      (setf (return-code request) +http-partial-content+
-            bytes-to-send (1+ (- end start))
-            (header-out :content-range request) (format nil "bytes ~D-~D/*" start end)))
-    bytes-to-send))
-
-(defun enough-url (url url-prefix)
-  "Returns the relative portion of URL relative to URL-PREFIX, similar
-to what ENOUGH-NAMESTRING does for pathnames."
-  (subseq url (or (mismatch url url-prefix) (length url-prefix))))
-
 (defun no-cache (request)
   "Adds appropriate headers to completely prevent caching on most browsers."
   (setf
@@ -131,6 +99,60 @@ If CODE is a 3xx redirection code, it will be sent as status code."
     (setf (header-out :location request) url)
     (abort-request-handler request code)))
 
+(defun require-authorization (request &optional (realm "Toot"))
+  "Sends back appropriate headers to require basic HTTP authentication
+\(see RFC 2617) for the realm REALM."
+  (setf (header-out :www-authenticate request)
+        (format nil "Basic realm=\"~A\"" (quote-string realm)))
+  (abort-request-handler request +http-authorization-required+))
+
+(defun handle-if-modified-since (time request)
+  "Handles the 'If-Modified-Since' header of REQUEST.  The date string
+is compared to the one generated from the supplied universal time
+TIME."
+  (let ((if-modified-since (header-in :if-modified-since request))
+        (time-string (rfc-1123-date time)))
+    ;; simple string comparison is sufficient; see RFC 2616 14.25
+    (when (and if-modified-since
+               (equal if-modified-since time-string))
+      (abort-request-handler request +http-not-modified+))
+    (values)))
+
+(defun enough-url (url url-prefix)
+  "Returns the relative portion of URL relative to URL-PREFIX, similar
+to what ENOUGH-NAMESTRING does for pathnames."
+  (subseq url (or (mismatch url url-prefix) (length url-prefix))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Internal
+
+(defun maybe-handle-range-header (request file)
+  "Helper function for serve-file. Determines whether the requests
+  specifies a Range header. If so, parses the header and position the
+  already opened file to the location specified. Returns the number of
+  bytes to transfer from the file. Invalid specified ranges are
+  reported to the client with a HTTP 416 status code."
+  (let ((bytes-to-send (file-length file)))
+    (cl-ppcre:register-groups-bind
+        (start end)
+        ("^bytes (\\d+)-(\\d+)$" (header-in :range request) :sharedp t)
+      ;; body won't be executed if regular expression does not match
+      (setf start (parse-integer start)
+            end (parse-integer end))
+      (when (or (< start 0)
+                (>= end (file-length file)))
+        (setf (header-out :content-range request) (format nil "bytes 0-~D/*" (1- (file-length file))))
+        (abort-request-handler
+         request
+         +http-requested-range-not-satisfiable+
+         (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
+                 start end (1- (file-length file)))))
+      (file-position file start)
+      (setf (return-code request) +http-partial-content+
+            bytes-to-send (1+ (- end start))
+            (header-out :content-range request) (format nil "bytes ~D-~D/*" start end)))
+    bytes-to-send))
+
 (defun starts-with-scheme-p (string)
   "Checks whether the string STRING represents a URL which starts with
 a scheme, i.e. something like 'https://' or 'mailto:'."
@@ -142,10 +164,3 @@ a scheme, i.e. something like 'https://' or 'mailto:'."
         do (setq scheme-char-seen-p t)
         else return (and scheme-char-seen-p
                          (char= c #\:))))
-
-(defun require-authorization (request &optional (realm "Toot"))
-  "Sends back appropriate headers to require basic HTTP authentication
-\(see RFC 2617) for the realm REALM."
-  (setf (header-out :www-authenticate request)
-        (format nil "Basic realm=\"~A\"" (quote-string realm)))
-  (abort-request-handler request +http-authorization-required+))
