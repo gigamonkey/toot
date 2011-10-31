@@ -1,4 +1,3 @@
-
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz.  All rights reserved.
 
 ;;; Redistribution and use in source and binary forms, with or without
@@ -28,12 +27,12 @@
 (in-package :toot)
 
 (defclass cookie ()
-  ((name :initarg :name :reader cookie-name :type string)
-   (value :initarg :value :accessor cookie-value :initform "")
-   (expires :initarg :expires :initform nil :accessor cookie-expires)
-   (path :initarg :path :initform nil :accessor cookie-path)
-   (domain :initarg :domain :initform nil :accessor cookie-domain)
-   (secure :initarg :secure :initform nil :accessor cookie-secure)
+  ((name      :initarg :name                    :reader cookie-name :type string)
+   (value     :initarg :value     :initform ""  :accessor cookie-value)
+   (expires   :initarg :expires   :initform nil :accessor cookie-expires)
+   (path      :initarg :path      :initform nil :accessor cookie-path)
+   (domain    :initarg :domain    :initform nil :accessor cookie-domain)
+   (secure    :initarg :secure    :initform nil :accessor cookie-secure)
    (http-only :initarg :http-only :initform nil :accessor cookie-http-only)))
 
 (defmethod initialize-instance :around ((cookie cookie) &rest init-args)
@@ -46,13 +45,13 @@
 (defun set-cookie (name request &key (value "") expires path domain secure http-only)
   (let ((place (assoc name (cookies-out request) :test #'string=))
         (cookie (make-instance 'cookie
-                   :name name
-                   :value value
-                   :expires expires
-                   :path path
-                   :domain domain
-                   :secure secure
-                   :http-only http-only)))
+                  :name name
+                  :value value
+                  :expires expires
+                  :path path
+                  :domain domain
+                  :secure secure
+                  :http-only http-only)))
     (cond
       (place (setf (cdr place) cookie))
       (t (push (cons name cookie) (cookies-out request))))

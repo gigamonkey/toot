@@ -87,7 +87,6 @@ Logging (where to and what format)
 [taskmaster] handle-incoming-connection -> 
 [acceptor] process-connection (in new thread for each connection)-> 
 [request] process-request (in loop) -> 
-[acceptor] handle-request -> 
 dispatch to user code.
 
 * Response generation
@@ -109,3 +108,11 @@ be.
 
   (defmethod render-body ((object string) stream)
     (write-string object stream))
+
+* Renaming
+
+headers-in -> request-headers
+header-in -> request-header
+headers-out -> reply-headers
+header-out -> reply-header
+return-code -> http-status-code or status-code

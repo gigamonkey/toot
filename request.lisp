@@ -29,16 +29,16 @@
 (defclass request ()
   (
    ;; Information about the request itself
-   (remote-addr :initarg :remote-addr :reader remote-addr)
-   (remote-port :initarg :remote-port :reader remote-port)
-   (script-name :initform nil :reader script-name)
-   (method :initarg :method :reader request-method)
-   (query-string :initform nil :reader query-string)
-   (get-parameters :initform nil :reader get-parameters)
+   (remote-addr :initarg :remote-addr :reader remote-addr) ; cgi REMOTE_ADDR
+   (remote-port :initarg :remote-port :reader remote-port) ; cgi - weirdly missing
+   (script-name :initform nil :reader script-name) ; cgi SCRIPT_NAME
+   (method :initarg :method :reader request-method) ; cgi REQUEST_METHOD
+   (query-string :initform nil :reader query-string) ; cgi QUERY_STRING
+   (server-protocol :initarg :server-protocol :reader server-protocol) ; cgi SERVER_PROTOCOL
+   (uri :initarg :uri :reader request-uri)
+   (get-parameters :initform nil :reader get-parameters) 
    (post-parameters :initform nil :reader post-parameters)
    (raw-post-data :initform nil)
-   (server-protocol :initarg :server-protocol :reader server-protocol)
-   (uri :initarg :uri :reader request-uri)
    (headers-in :initarg :headers-in :reader headers-in)
    (cookies-in :initform nil :reader cookies-in)
 
@@ -176,38 +176,37 @@ already been read."
                        finally (return content)))))))
 
 (defmethod initialize-instance :after ((request request) &rest init-args)
-  "The only initarg for a REQUEST object is :HEADERS-IN.  All other
-slot values are computed in this :AFTER method."
   (declare (ignore init-args))
   (setf (header-out :content-type request) *default-content-type*)
 
   (with-slots (headers-in cookies-in get-parameters script-name query-string)
       request
     (handler-case*
-        (progn
-          (let* ((uri (request-uri request))
-                 (match-start (position #\? uri)))
-            (cond
-             (match-start
-              (setf script-name (subseq uri 0 match-start)
-                    query-string (subseq uri (1+ match-start))))
-             (t (setf script-name uri))))
-          ;; some clients (e.g. ASDF-INSTALL) send requests like
-          ;; "GET http://server/foo.html HTTP/1.0"...
-          (setf script-name (regex-replace "^https?://[^/]+" script-name ""))
-          ;; compute GET parameters from query string and cookies from
-          ;; the incoming 'Cookie' header
-          (setf get-parameters
-                (let ((*substitution-char* #\?))
-                  (form-url-encoded-list-to-alist (split "&" query-string)))
-                cookies-in
-                (form-url-encoded-list-to-alist (split "\\s*[,;]\\s*" (cdr (assoc :cookie headers-in
-                                                                                  :test #'eq)))
-                                                +utf-8+)))
-      (error (condition)
-        (log-message request :error "Error when creating REQUEST object: ~A" condition)
-        ;; we assume it's not our fault...
-        (setf (return-code request) +http-bad-request+)))))
+     (progn
+       (let* ((uri (request-uri request))
+              (match-start (position #\? uri)))
+         (cond
+           (match-start
+            (setf script-name (subseq uri 0 match-start)
+                  query-string (subseq uri (1+ match-start))))
+           (t (setf script-name uri))))
+       ;; some clients (e.g. ASDF-INSTALL) send requests like
+       ;; "GET http://server/foo.html HTTP/1.0"...
+       (setf script-name (regex-replace "^https?://[^/]+" script-name ""))
+       ;; compute GET parameters from query string and cookies from
+       ;; the incoming 'Cookie' header
+       (setf get-parameters
+             (let ((*substitution-char* #\?))
+               (form-url-encoded-list-to-alist (split "&" query-string))))
+
+       ;; FIXME: Are cookies always encoded in UTF-8?
+       (setf cookies-in
+             (form-url-encoded-list-to-alist (split "\\s*[,;]\\s*" (cdr (assoc :cookie headers-in)))
+                                             +utf-8+)))
+     (error (condition)
+            (log-message request :error "Error when creating REQUEST object: ~A" condition)
+            ;; we assume it's not our fault...
+            (setf (return-code request) +http-bad-request+)))))
 
 (defun process-request (request)
   ;; used by HTTP HEAD handling to end request processing in a HEAD
@@ -215,22 +214,38 @@ slot values are computed in this :AFTER method."
   (catch 'request-processed
     (unwind-protect
          (multiple-value-bind (body error backtrace) 
-             (handle-request request)
+             ;; The handler can throw handler-done (by calling
+             ;; abort-request-handler) to provide a body, error, and
+             ;; backtrace after setting the HTTP status code.
+             ;; Otherwise the handler can either call SEND-HEADERS and
+             ;; write the body to the stream or return a string which
+             ;; will be encoded and sent as the body of the reply.
+             (catch 'handler-done
+               (handler-bind 
+                   ((error
+                     (lambda (cond)
+                       ;; if the headers were already sent, the error happened
+                       ;; within the body and we have to close the stream
+                       (when (headers-sent-p request) (setf (close-stream-p request) t))
+                       (throw 'handler-done (values nil cond (get-backtrace)))))
+                    (warning
+                     (lambda (cond)
+                       (when *log-lisp-warnings-p*
+                         (log-message request *lisp-warnings-log-level* "~A" cond)))))
+                 (with-debugger
+                   (dispatch (dispatcher (acceptor request)) request))))
 
            (when error (report-error-to-client request error backtrace))
 
            ;; Headers will have been sent if the handler called
-           ;; SEND-HEADERS and then wrote response directly to the
+           ;; SEND-HEADERS and wrote the response directly to the
            ;; stream. In that case there is nothing left to do but
-           ;; clean up. Otherwise, if the return-code is one that
-           ;; needs an error message we generate that or we return the
-           ;; string returned by the handler as the body of the reply.
+           ;; clean up. Otherwise, send the returned body or, if there
+           ;; is none, an error message we generated based on the
+           ;; return code.
            (unless (headers-sent-p request)
              (handler-case
-                 (with-debugger
-                   ;;; I've reversed things here: if the handler
-                   ;;; supplied a body, we use it. Otherwise, we'll
-                   ;;; try and provide a default body
+                 (with-debugger 
                    (start-output request (or body (error-page request))))
                (error (e)
                  ;; error occured while writing to the client. attempt to report.
@@ -240,7 +255,12 @@ slot values are computed in this :AFTER method."
 
 (defun report-error-to-client (request error &optional backtrace)
   (when *log-lisp-errors-p*
-    (log-message request *lisp-errors-log-level* "~A~@[~%~A~]" error (when *log-lisp-backtraces-p* backtrace)))
+    (log-message
+     request
+     *lisp-errors-log-level*
+     "~A~@[~%~A~]"
+     error
+     (and *log-lisp-backtraces-p* backtrace)))
   (setf (return-code request) +http-internal-server-error+)
   (start-output
    request
@@ -274,7 +294,7 @@ alist or NIL if there was no data or the data could not be parsed."
       nil)))
 
 (defun maybe-read-post-parameters (request &key force external-format)
-  "Make surce that any POST parameters in the REQUEST are parsed. The
+  "Make sure that any POST parameters in the REQUEST are parsed. The
 body of the request must be either application/x-www-form-urlencoded
 or multipart/form-data to be considered as containing POST parameters.
 If FORCE is true, parsing is done unconditionally. Otherwise, parsing
@@ -402,8 +422,7 @@ there is none.  Search is case-sensitive."
 or NIL if there is none.  If both a GET and a POST parameter with the
 same name exist the GET parameter is returned.  Search is
 case-sensitive."
-  (or (get-parameter name request)
-      (post-parameter name request)))
+  (or (get-parameter name request) (post-parameter name request)))
 
 (defun handle-if-modified-since (time request)
   "Handles the 'If-Modified-Since' header of REQUEST.  The date string

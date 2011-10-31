@@ -257,27 +257,6 @@ ignored."
                          (write-timeout acceptor))
            (handle-incoming-connection (taskmaster acceptor) acceptor client-connection))))))
 
-(defun handle-request (request)
-  ;; If the handler we dispatch to throws handler-done, we will return
-  ;; the values thrown. Otherwise we return whatever values the
-  ;; handler returns. If the handler returns a value (and it has not
-  ;; called send-headers) the value should be a string which will be
-  ;; encoded and sent as the body of the reply.
-  (catch 'handler-done
-    (handler-bind 
-        ((error
-          (lambda (cond)
-            ;; if the headers were already sent, the error happened
-            ;; within the body and we have to close the stream
-            (when (headers-sent-p request) (setf (close-stream-p request) t))
-            (throw 'handler-done (values nil cond (get-backtrace)))))
-         (warning
-          (lambda (cond)
-            (when *log-lisp-warnings-p*
-              (log-message request *lisp-warnings-log-level* "~A" cond)))))
-      (with-debugger
-        (dispatch (dispatcher (acceptor request)) request)))))
-
 (defun abort-request-handler (request response-status-code &optional body)
   "Abort the handling of a request, sending instead a response with
 the given response-status-code. A request can only be aborted if
@@ -286,5 +265,6 @@ SEND-HEADERS has not been called."
   (throw 'handler-done body))
 
 (defun error-page (request &key error backtrace)
-  "Generate the body of an error page, using the acceptors error generator."
+  "Generate the body of an error page, using the acceptor's error
+generator."
   (generate-error-page (error-generator (acceptor request)) request :error error :backtrace backtrace))

@@ -27,12 +27,14 @@
 (in-package :toot)
 
 (defgeneric dispatch (dispatcher request)
-  (:documentation "An object that can be used by an acceptor to dispatch a request."))
+  (:documentation "This function is used by the acceptor to dispatch a
+request."))
+
+(defgeneric generate-error-page (generator request &key error backtrace))
 
 (defmethod dispatch ((dispatcher function) request)
   (funcall dispatcher request))
 
-(defgeneric generate-error-page (generator request &key error backtrace))
 
 (defmethod generate-error-page ((generator function) request &key error backtrace)
   (funcall generator request error backtrace))
