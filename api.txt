@@ -1,0 +1,126 @@
+-*- mode: markup; -*-
+
+* Handlers
+
+Toot’s main job, as a web server, is to accept a connection for an
+HTTP client (e.g. a browser), read and parse the client’s request and
+return a reply. Under the covers there’s a bunch of gorp it has to
+deal with involving persistent connections, parsing the request,
+chunking output, etc. But from the point of view of a user trying to
+serve web pages the main connection to Toot is via a \i{handler} which
+can be any object which can be passed as the first argument to the
+\code{handle-request} generic function.
+
+   (defgeneric handle-request (handler request))
+
+Out of the box, Toot, defines a method specializing the \code{handler}
+parameter on \code{function}, which just turns around and calls the
+function with one argument, the \code{request}.
+
+A handler has three choices of how it can handle a request.
+
+  - It can call \code{send-headers} on the request which will return a
+    stream to which it can then write the body of the reply.
+
+  - It can return a string which will then be sent as the body of the reply.
+
+  - It can call \code{abort-request-handler} with an HTTP status code,
+    usually >= 300 which will cause the server to send an appropriate
+    reply to the client. (This is used for both errors, e.g. 404: Not
+    found, and also thing like redirects, e.g. 301: Moved permanently.)
+
+A simple handler is something that maps the incoming request to a
+response. For example the function returned by
+\code{make-static-file-handler} simply maps the request URI to a file
+under a given directory and serves it if it exists.
+
+A more complex handler could be built by composing sub-handlers. For
+instance, one could build a handler that looks at the request in order
+to determine which sub-handler to hand it off to. Or one that has a
+list of handlers that it tries in order until one handles it, with
+some mechanism for the sub-handlers to indicate that they are not
+capabable of handling the request.
+
+
+* Functions useful in handlers
+
+** Request data
+
+script-name
+
+method
+
+query-string
+
+get-parameters
+
+post-parameters
+
+header-in
+
+cookie-in
+
+remote-addr
+
+remote-port
+
+authorization — gets the username and password provided via basic HTTP auth.
+
+host
+
+user-agent
+
+cookie-in
+
+referer
+
+get-parameter
+
+post-parameter
+
+parameter
+
+** For controlling reply — low level
+
+(setf return-code)
+
+(setf content-length)
+
+(setf content-type)
+
+(setf external-format)
+
+(setf header-out)
+
+** For controlling reply — high-level
+
+send-headers — causes the HTTP headers to be sent and returns a stream
+to which the body of the reply can be written.
+
+\code{redirect} — send a redirect rather than generating a reply.
+
+no-cache — add headers to the reply which should prevent caching by the browser.
+
+serve-file — serve up a specific file. Handles if-modified-since and
+guesses at content-type based on extension if not supplied. Sends 404:
+Not found reply if file does not exist.
+
+handle-if-modified-since — send a Not Modified reply if the time
+provided is the same as the time provided in the request.
+
+require-authorization — sends headers requiring basic HTTP authentication.
+
+** Misc
+
+log-message — log a message to Toot’s message log.
+
+
+* Functions useful for composing handlers
+
+make-prefix-handler
+
+make-regex-handler
+
+make-exact-path-handler
+
+
