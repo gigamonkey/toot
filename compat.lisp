@@ -105,20 +105,3 @@ ignored."
       (ssl-adapter (setup-ssl-stream ssl-adapter base-stream))
       (t base-stream))))
 
-(defun make-lock (name)
-  "Simple wrapper to allow LispWorks and Bordeaux Threads to coexist."
-  (bt:make-lock name))
-
-(defmacro with-lock-held ((lock) &body body)
-  "Simple wrapper to allow LispWorks and Bordeaux Threads to coexist."
-  `(bt:with-lock-held (,lock) ,@body))
-
-(defun make-condition-variable (&key name)
-  (declare (ignore name))
-  (bt:make-condition-variable))
-
-(defun condition-variable-signal (condition-variable)
-  (bt:condition-notify condition-variable))
-
-(defun condition-variable-wait (condition-variable lock)
-  (bt:condition-wait condition-variable lock))

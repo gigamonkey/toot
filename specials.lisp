@@ -202,7 +202,9 @@ encode cookie values.")
   "The default connection timeout used when an acceptor is reading
 from and writing to a socket stream.")
 
-(defvar *default-taskmaster-class* (if bt:*supports-threads-p* 'thread-per-connection-taskmaster 'single-threaded-taskmaster))
+(defvar *default-taskmaster-class* (if *supports-threads-p*
+                                       'thread-per-connection-taskmaster
+                                       'single-threaded-taskmaster))
 
 (defconstant +new-connection-wait-time+ 2
   "Time in seconds to wait for a new connection to arrive before

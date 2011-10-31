@@ -133,7 +133,7 @@ implementations."))
 
 (defmethod execute-acceptor ((taskmaster thread-per-connection-taskmaster) acceptor)
   (setf (acceptor-process taskmaster)
-        (bt:make-thread 
+        (make-thread 
          (lambda () (accept-connections acceptor)) 
          :name (listen-thread-name acceptor))))
 
@@ -168,7 +168,7 @@ implementations."))
 (defmethod shutdown ((taskmaster thread-per-connection-taskmaster) acceptor)
   ;; just wait until the acceptor process has finished, then return
   (loop  
-   (unless (bt:thread-alive-p (acceptor-process taskmaster))
+   (unless (thread-alive-p (acceptor-process taskmaster))
      (return))
    (sleep 1))
   taskmaster)
@@ -189,12 +189,12 @@ implementations."))
 
 (defun note-free-connection (taskmaster)
   (with-lock-held ((taskmaster-wait-lock taskmaster))
-    (condition-variable-signal (taskmaster-wait-queue taskmaster))))
+    (condition-notify (taskmaster-wait-queue taskmaster))))
 
 (defun wait-for-free-connection (taskmaster)
   (with-lock-held ((taskmaster-wait-lock taskmaster))
     (loop until (< (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster))
-          do (condition-variable-wait (taskmaster-wait-queue taskmaster) (taskmaster-wait-lock taskmaster)))))
+          do (condition-wait (taskmaster-wait-queue taskmaster) (taskmaster-wait-lock taskmaster)))))
 
 (defun send-service-unavailable-reply (acceptor socket)
   "A helper function to send out a quick error reply, before any state
@@ -213,7 +213,7 @@ is set up via PROCESS-REQUEST."
   ;; GET-PEER-ADDRESS-AND-PORT which can signal socket conditions on
   ;; some platforms in certain situations.
   (handler-case*
-   (bt:make-thread
+   (make-thread
     (lambda ()
       (increment-taskmaster-request-count taskmaster)
       (unwind-protect

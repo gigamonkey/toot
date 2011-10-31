@@ -124,8 +124,7 @@
       ;; the threads processing requests will signal on the
       ;; shutdown-queue
       (when (plusp (accessor-requests-in-progress acceptor))
-        (condition-variable-wait (shutdown-queue acceptor) 
-                                 (shutdown-lock acceptor)))))
+        (condition-wait (shutdown-queue acceptor) (shutdown-lock acceptor)))))
   (usocket:socket-close (listen-socket acceptor))
   (setf (listen-socket acceptor) nil)
   acceptor)
@@ -138,7 +137,7 @@
     (with-lock-held ((shutdown-lock acceptor))
       (decf (accessor-requests-in-progress acceptor))
       (when (shutdown-p acceptor)
-        (condition-variable-signal (shutdown-queue acceptor))))))
+        (condition-notify (shutdown-queue acceptor))))))
 
 (defmacro with-request-count-incremented ((acceptor) &body body)
   "Execute BODY with REQUESTS-IN-PROGRESS of ACCEPTOR
