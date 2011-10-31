@@ -119,15 +119,8 @@
            #:cookie-value
            #:cookies-in
            #:cookies-out
-           #:create-folder-dispatcher-and-handler
-           #:create-prefix-dispatcher
-           #:create-regex-dispatcher
-           #:create-static-file-dispatcher-and-handler
            #:default-document-directory
-           #:define-easy-handler
            #:delete-aux-request-value
-           #:dispatch-easy-handlers
-           #:easy-acceptor
            #:escape-for-html
            #:get-parameter
            #:get-parameters

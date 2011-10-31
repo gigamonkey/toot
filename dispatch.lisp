@@ -26,26 +26,28 @@
 
 (in-package :toot)
 
-(defgeneric dispatch (dispatcher request)
-  (:documentation "This function is used by the acceptor to dispatch a
-request."))
+(defgeneric handle-request (handler request)
+  (:documentation "Used by the acceptor to handle a request."))
 
-(defgeneric generate-error-page (generator request &key error backtrace))
+(defgeneric generate-error-page (generator request &key error backtrace)
+  (:documentation "Used by acceptor to generate an error page for a
+  request based on the http status code."))
 
-(defmethod dispatch ((dispatcher function) request)
-  (funcall dispatcher request))
+;;; Use functions as handlers and error page generators
 
+(defmethod handle-request ((handler function) request)
+  (funcall handler request))
 
 (defmethod generate-error-page ((generator function) request &key error backtrace)
   (funcall generator request error backtrace))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Static file dispatcher
+;;; Static file handler
 
 (defun test-document-directory (&optional sub-directory)
   (asdf:system-relative-pathname :toot (format nil "www/~@[~A~]" sub-directory)))
 
-(defun make-static-file-dispatcher (document-root)
+(defun make-static-file-handler (document-root)
   (lambda (request)
     (let ((script-name (script-name request)))
       (when (string= script-name "/fail")

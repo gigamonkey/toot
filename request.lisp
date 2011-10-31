@@ -233,7 +233,7 @@ already been read."
                        (when *log-lisp-warnings-p*
                          (log-message request *lisp-warnings-log-level* "~A" cond)))))
                  (with-debugger
-                   (dispatch (dispatcher (acceptor request)) request))))
+                   (handle-request (handler (acceptor request)) request))))
 
            (when error (report-error-to-client request error backtrace))
 

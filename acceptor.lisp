@@ -46,7 +46,7 @@
    (access-loggger :initarg :access-logger :initform *default-logger* :accessor access-logger)
    (message-logger :initarg :message-logger :initform *default-logger* :accessor message-logger)
    (ssl-adapter :initarg :ssl-adapter :accessor ssl-adapter)
-   (dispatcher :initarg :dispatcher :accessor dispatcher)
+   (handler :initarg :handler :accessor handler)
    (error-generator :initarg :error-generator :accessor error-generator))
 
   (:default-initargs
@@ -98,7 +98,7 @@
 (defun start-server (&key port)
   (start (make-instance 'acceptor
            :port port
-           :dispatcher (make-static-file-dispatcher (test-document-directory)))))
+           :handler (make-static-file-handler (test-document-directory)))))
 
 (defun start (acceptor)
   (when (listen-socket acceptor)
