@@ -236,7 +236,11 @@ already been read."
                        (when *log-lisp-warnings-p*
                          (log-message request *lisp-warnings-log-level* "~A" cond)))))
                  (with-debugger
-                   (handle-request (handler (acceptor request)) request))))
+                   (let ((result (handle-request (handler (acceptor request)) request)))
+                     (cond
+                       ((eql result 'not-handled)
+                        (abort-request-handler request +http-not-found+))
+                       (t result))))))
 
            (when error (report-error-to-client request error backtrace))
 

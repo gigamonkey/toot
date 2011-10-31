@@ -95,10 +95,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Start and stop an acceptor
 
-(defun start-server (&key port)
-  (start (make-instance 'acceptor
-           :port port
-           :handler (make-static-file-handler (test-document-directory)))))
+(defun start-server (&key port (handler (make-static-file-handler (test-document-directory))))
+  (start (make-instance 'acceptor :port port :handler handler)))
 
 (defun start (acceptor)
   (when (listen-socket acceptor)

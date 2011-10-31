@@ -60,8 +60,7 @@
                         ;; only turn chunking on if the content
                         ;; length is unknown at this point...
                         (null (or (content-length request) content-provided-p))))
-         (request-method (request-method request))
-         (head-request-p (eql request-method :head)))
+         (head-request-p (eql (request-method request) :head)))
 
     (multiple-value-bind (keep-alive-p keep-alive-requested-p)
         (keep-alive-p request)
@@ -115,7 +114,6 @@
     ;; send headers only once
     (when (headers-sent-p request) (return-from start-output))
 
-    (setf (headers-sent-p request) t)
     (send-response 
      request
      (content-stream request)
@@ -123,6 +121,13 @@
      :headers (headers-out request)
      :cookies (cookies-out request)
      :content (unless head-request-p content))
+
+    ;; FIXME: perhaps if content has been provided, we should not
+    ;; return a stream since send-response will have set the
+    ;; content-length and sent the whole content already. Though it
+    ;; may not matter since the only places that would call this with
+    ;; a non-nil content are going to ignore the returned stream
+    ;; anyway.
 
     ;; when processing a HEAD request, exit to return from PROCESS-REQUEST
     (when head-request-p (throw 'request-processed nil))
@@ -160,6 +165,7 @@
     (loop for (nil . cookie) in cookies
        do (write-header-line "Set-Cookie" (stringify-cookie cookie) header-stream))
     (format header-stream "~C~C" #\Return #\Linefeed))
+  (setf (headers-sent-p request) t)
   ;; now optional content
   (when content
     (write-sequence content stream)
