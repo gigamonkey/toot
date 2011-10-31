@@ -89,19 +89,5 @@ are discarded \(that is, the body is an implicit PROGN)."
                             `(let (,,@temps)
                               ,,@body))))))
 
-(defun get-peer-address-and-port (socket)
-  "Returns the peer address and port of the socket SOCKET as two
-values.  The address is returned as a string in dotted IP address
-notation."
-  (values (usocket:vector-quad-to-dotted-quad (usocket:get-peer-address socket))
-          (usocket:get-peer-port socket)))
 
-(defun make-socket-stream (socket acceptor)
-  "Returns a stream for the socket SOCKET.  The ACCEPTOR argument is
-ignored."
-  (let ((base-stream (usocket:socket-stream socket))
-        (ssl-adapter (ssl-adapter acceptor)))
-    (cond
-      (ssl-adapter (setup-ssl-stream ssl-adapter base-stream))
-      (t base-stream))))
 
