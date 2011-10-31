@@ -28,6 +28,44 @@
 
 (defvar *default-logger* (make-instance 'stream-logger :destination *error-output*))
 
+(defclass acceptor ()
+  ((port :initarg :port :reader port)
+   (address :initarg :address :reader address)
+   (taskmaster :initarg :taskmaster :reader taskmaster)
+   (output-chunking-p :initarg :output-chunking-p :accessor output-chunking-p)
+   (input-chunking-p :initarg :input-chunking-p :accessor input-chunking-p)
+   (persistent-connections-p :initarg :persistent-connections-p :accessor persistent-connections-p)
+   (read-timeout :initarg :read-timeout :reader read-timeout)
+   (write-timeout :initarg :write-timeout :reader write-timeout)
+   (listen-socket :initform nil :accessor listen-socket)
+   (listen-backlog :initarg :listen-backlog :reader listen-backlog)
+   (shutdown-p :initform t :accessor shutdown-p)
+   (requests-in-progress :initform 0 :accessor accessor-requests-in-progress)
+   (shutdown-queue :initform (make-condition-variable) :accessor shutdown-queue)
+   (shutdown-lock :initform (make-lock "toot-shutdown") :accessor shutdown-lock)
+   (access-loggger :initarg :access-logger :initform *default-logger* :accessor access-logger)
+   (message-logger :initarg :message-logger :initform *default-logger* :accessor message-logger)
+   (ssl-adapter :initarg :ssl-adapter :accessor ssl-adapter)
+   (handler :initarg :handler :accessor handler)
+   (error-generator :initarg :error-generator :accessor error-generator))
+
+  (:default-initargs
+    :address nil
+    :port 80
+    :listen-backlog 50
+    :taskmaster (make-instance *default-taskmaster-class*)
+    :output-chunking-p t
+    :input-chunking-p t
+    :persistent-connections-p t
+    :read-timeout *default-connection-timeout*
+    :write-timeout *default-connection-timeout*
+    :ssl-adapter nil
+    :error-generator #'default-error-message-generator))
+
+(defmethod print-object ((acceptor acceptor) stream)
+  (print-unreadable-object (acceptor stream :type t)
+    (format stream "\(host ~A, port ~A)" (or (address acceptor) "*") (port acceptor))))
+
 (defclass request ()
   (
    ;; Information about the request itself
@@ -63,8 +101,17 @@
    (aux-data :initform nil :accessor aux-data)
    ))
 
+;;; Convenience methods to pass along log-message calls until we hit the actual logger.
+
+(defmethod log-message ((acceptor acceptor) log-level format-string &rest format-arguments)
+  (apply #'log-message (message-logger acceptor) log-level format-string format-arguments))
+
 (defmethod log-message ((request request) log-level format-string &rest format-arguments)
   (apply #'log-message (acceptor request) log-level format-string format-arguments))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; API functions
 
 (defun (setf content-type) (new-value request)
   "Sets the outgoing 'Content-Type' http header of REQUEST."
@@ -522,47 +569,9 @@ REQUEST."
                     :key #'car :test #'eq)))
   (values))
 
-(defclass acceptor ()
-  ((port :initarg :port :reader port)
-   (address :initarg :address :reader address)
-   (taskmaster :initarg :taskmaster :reader taskmaster)
-   (output-chunking-p :initarg :output-chunking-p :accessor output-chunking-p)
-   (input-chunking-p :initarg :input-chunking-p :accessor input-chunking-p)
-   (persistent-connections-p :initarg :persistent-connections-p :accessor persistent-connections-p)
-   (read-timeout :initarg :read-timeout :reader read-timeout)
-   (write-timeout :initarg :write-timeout :reader write-timeout)
-   (listen-socket :initform nil :accessor listen-socket)
-   (listen-backlog :initarg :listen-backlog :reader listen-backlog)
-   (shutdown-p :initform t :accessor shutdown-p)
-   (requests-in-progress :initform 0 :accessor accessor-requests-in-progress)
-   (shutdown-queue :initform (make-condition-variable) :accessor shutdown-queue)
-   (shutdown-lock :initform (make-lock "toot-shutdown") :accessor shutdown-lock)
-   (access-loggger :initarg :access-logger :initform *default-logger* :accessor access-logger)
-   (message-logger :initarg :message-logger :initform *default-logger* :accessor message-logger)
-   (ssl-adapter :initarg :ssl-adapter :accessor ssl-adapter)
-   (handler :initarg :handler :accessor handler)
-   (error-generator :initarg :error-generator :accessor error-generator))
 
-  (:default-initargs
-    :address nil
-    :port 80
-    :listen-backlog 50
-    :taskmaster (make-instance *default-taskmaster-class*)
-    :output-chunking-p t
-    :input-chunking-p t
-    :persistent-connections-p t
-    :read-timeout *default-connection-timeout*
-    :write-timeout *default-connection-timeout*
-    :ssl-adapter nil
-    :error-generator #'default-error-message-generator))
 
-(defmethod print-object ((acceptor acceptor) stream)
-  (print-unreadable-object (acceptor stream :type t)
-    (format stream "\(host ~A, port ~A)"
-            (or (address acceptor) "*") (port acceptor))))
 
-(defmethod log-message ((acceptor acceptor) log-level format-string &rest format-arguments)
-  (apply #'log-message (message-logger acceptor) log-level format-string format-arguments))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -26,26 +26,6 @@
 
 (in-package :toot)
 
-(defun write-header-line (key value stream)
-  (let ((string (princ-to-string value)))
-    (write-string key stream)
-    (write-char #\: stream)
-    (write-char #\Space stream)
-    (let ((start 0))
-      (loop
-         (let ((end (or (position #\Newline string :start start)
-                        (length string))))
-           ;; skip empty lines, as they confuse certain HTTP clients
-           (unless (eql start end)
-             (unless (zerop start)
-               (write-char #\Tab stream))
-             (write-string string stream :start start :end end)
-             (write-char #\Return stream)
-             (write-char #\Linefeed stream))
-           (setf start (1+ end))
-           (when (<= (length string) start)
-             (return)))))))
-
 (defun maybe-add-charset-to-content-type-header (content-type external-format)
   (if (and (cl-ppcre:scan "(?i)^text" content-type)
            (not (cl-ppcre:scan "(?i);\\s*charset=" content-type)))
@@ -112,113 +92,101 @@
       (setf (header-out :content-length request) (length content)))
 
     ;; send headers only once
-    (when (headers-sent-p request) (return-from start-output))
+    (unless (headers-sent-p request)
+      (let ((stream (content-stream request)))
 
-    (send-response 
-     request
-     (content-stream request)
-     return-code
-     :headers (headers-out request)
-     :cookies (cookies-out request)
-     :content (unless head-request-p content))
+        (send-response stream request return-code :content (unless head-request-p content))
+      
+        ;; when processing a HEAD request, exit to return from PROCESS-REQUEST
+        (when head-request-p (throw 'request-processed nil))
+      
+        (when chunkedp
+          ;; turn chunking on after the headers have been sent
+          (unless (typep (content-stream request) 'chunked-stream)
+            (setf (content-stream request) (make-chunked-stream (content-stream request))))
+          (setf (chunked-stream-output-chunking-p (content-stream request)) t))
+      
+        (content-stream request)))))
 
-    ;; FIXME: perhaps if content has been provided, we should not
-    ;; return a stream since send-response will have set the
-    ;; content-length and sent the whole content already. Though it
-    ;; may not matter since the only places that would call this with
-    ;; a non-nil content are going to ignore the returned stream
-    ;; anyway.
+(defun send-response (stream request status-code &key content)
+  (when content (setf (content-length request) (length content)))
 
-    ;; when processing a HEAD request, exit to return from PROCESS-REQUEST
-    (when head-request-p (throw 'request-processed nil))
+  ;; I'm pretty sure this is not necessary since (setf
+  ;; content-length) takes care of setting the header in
+  ;; headers-out.
+  #+(or)(when (content-length request)
+          (if (assoc :content-length headers)
+              (setf (cdr (assoc :content-length headers)) (content-length request))
+              (push (cons :content-length (content-length request)) headers)))
 
-    (when chunkedp
-      ;; turn chunking on after the headers have been sent
-      (unless (typep (content-stream request) 'chunked-stream)
-        (setf (content-stream request) (make-chunked-stream (content-stream request))))
-      (setf (chunked-stream-output-chunking-p (content-stream request)) t))
-
-    (content-stream request)))
-
-(defun send-response (request stream status-code &key headers cookies content)
-  (when content
-    (setf (content-length request) (length content)))
-  (when (content-length request)
-    (if (assoc :content-length headers)
-        (setf (cdr (assoc :content-length headers)) (content-length request))
-        (push (cons :content-length (content-length request)) headers)))
-  ;; access log message
   (log-access (access-logger (acceptor request)) request)
-  ;; Read post data to clear stream - Force binary mode to avoid OCTETS-TO-STRING overhead.
+
+  ;; Read post data to clear stream - Force binary mode to avoid
+  ;; OCTETS-TO-STRING overhead.
   (raw-post-data request :force-binary t)
-  (let* ((client-header-stream (flex:make-flexi-stream stream :external-format :iso-8859-1))
-         (header-stream (if *header-stream*
-                            (make-broadcast-stream *header-stream* client-header-stream)
-                            client-header-stream)))
-    ;; start with status line
-    (format header-stream "HTTP/1.1 ~D ~A~C~C" status-code (reason-phrase status-code) #\Return #\Linefeed)
-    ;; write all headers
-    (loop for (key . value) in headers
-       when value
-       do (write-header-line (as-capitalized-string key) value header-stream))
-    ;; now the cookies
-    (loop for (nil . cookie) in cookies
-       do (write-header-line "Set-Cookie" (stringify-cookie cookie) header-stream))
+
+  (let ((header-stream (make-header-stream stream)))
+    (write-status-line header-stream status-code)
+    (write-headers header-stream (headers-out request))
+    (write-cookies header-stream (cookies-out request))
     (format header-stream "~C~C" #\Return #\Linefeed))
+
   (setf (headers-sent-p request) t)
-  ;; now optional content
+
   (when content
     (write-sequence content stream)
-    (finish-output stream))
-  stream)
+    (finish-output stream)))
+
 
 (defun quick-send-response (stream status-code)
-  (let ((headers `((:content-length . 0))))
-  
-    ;; FIXME: might like to still log access message which we can't do
-    ;; at the moment because there's no request object.
+  "Send a response to the client before we've created a request
+object. At the moment used only to send a service unavailable
+response. This happens so early that we can't even log it to the
+access log. Which is perhaps unfortunate."
+  ;; We don't read post data to clear stream since we're just going to
+  ;; close it anyway.
+  (with-open-stream (stream (make-header-stream))
+    (write-status-line header-stream status-code)
+    (write-headers stream '((:content . 0)))
+    (format header-stream "~C~C" #\Return #\Linefeed)))
 
-    ;; Read post data to clear stream - Force binary mode to avoid OCTETS-TO-STRING overhead.
-    (let* ((client-header-stream (flex:make-flexi-stream stream :external-format :iso-8859-1))
-           (header-stream (if *header-stream*
-                              (make-broadcast-stream *header-stream* client-header-stream)
-                              client-header-stream)))
-      ;; start with status line
-      (format header-stream "HTTP/1.1 ~D ~A~C~C" status-code (reason-phrase status-code) #\Return #\Linefeed)
-      ;; write all headers
-      (loop for (key . value) in headers
-         when value
-         do (write-header-line (as-capitalized-string key) value header-stream))
-      (format header-stream "~C~C" #\Return #\Linefeed))
-    (finish-output stream)
-    (close stream)))
+(defun make-header-stream (stream)
+  (let* ((client-header-stream (flex:make-flexi-stream stream :external-format :iso-8859-1)))
+    (if *header-stream*
+        (make-broadcast-stream *header-stream* client-header-stream)
+        client-header-stream)))
 
-;; FIXME: if binary is nil, should we set external-format on the
-;; request so the content-type will get adjusted.
-(defun send-headers (request &key binary (external-format :utf-8))
-  "Send the headers and return a stream to which the body of the reply can be written."
-  (let ((stream (start-output request)))
-    (cond
-      (binary stream)
-      (t (flexi-streams:make-flexi-stream stream :external-format external-format)))))
+(defun write-status-line (stream status-code)
+  (format stream "HTTP/1.1 ~D ~A~C~C" status-code (reason-phrase status-code) #\Return #\Linefeed))
 
-(defun read-initial-request-line (stream)
-  (handler-case
-      (let ((*current-error-message* "While reading initial request line:"))
-        (usocket:with-mapped-conditions ()
-          (read-line* stream)))
-    ((or end-of-file usocket:timeout-error) ())))
+(defun write-headers (stream headers)
+  (loop for (key . value) in headers
+     when value do (write-header-line (as-capitalized-string key) value stream)))
 
-(defun send-bad-request-response (stream &optional additional-info)
-  (write-sequence (flex:string-to-octets
-                   (format nil "HTTP/1.0 ~D ~A~C~CConnection: close~C~C~C~CYour request could not be interpreted by this HTTP server~C~C~@[~A~]~C~C"
-                           +http-bad-request+ (reason-phrase +http-bad-request+) #\Return #\Linefeed
-                           #\Return #\Linefeed #\Return #\Linefeed #\Return #\Linefeed additional-info #\Return #\Linefeed))
-                  stream))
+(defun write-cookies (stream cookies)
+  (loop for (nil . cookie) in cookies
+     do (write-header-line "Set-Cookie" (stringify-cookie cookie) header-stream)))
 
-(defun printable-ascii-char-p (char)
-  (<= 32 (char-code char) 126))
-  
+(defun write-header-line (key value stream)
+  (let ((string (princ-to-string value)))
+    (write-string key stream)
+    (write-char #\: stream)
+    (write-char #\Space stream)
+    (let ((start 0))
+      (loop
+         (let ((end (or (position #\Newline string :start start)
+                        (length string))))
+           ;; skip empty lines, as they confuse certain HTTP clients
+           (unless (eql start end)
+             (unless (zerop start)
+               (write-char #\Tab stream))
+             (write-string string stream :start start :end end)
+             (write-char #\Return stream)
+             (write-char #\Linefeed stream))
+           (setf start (1+ end))
+           (when (<= (length string) start)
+             (return)))))))
+
 (defun get-request-data (stream)
   "Reads incoming headers from the client via STREAM.  Returns as
 multiple values the headers as an alist, the method, the URI, and the
@@ -257,3 +225,21 @@ protocol of the request."
                    (as-keyword method)
                    url-string
                    (as-keyword (trim-whitespace protocol)))))))))
+
+(defun read-initial-request-line (stream)
+  (handler-case
+      (let ((*current-error-message* "While reading initial request line:"))
+        (usocket:with-mapped-conditions ()
+          (read-line* stream)))
+    ((or end-of-file usocket:timeout-error) ())))
+  
+(defun printable-ascii-char-p (char)
+  (<= 32 (char-code char) 126))
+
+(defun send-bad-request-response (stream &optional additional-info)
+  (write-sequence 
+   (flex:string-to-octets
+    (format nil "HTTP/1.0 ~D ~A~C~CConnection: close~C~C~C~CYour request could not be interpreted by this HTTP server~C~C~@[~A~]~C~C"
+            +http-bad-request+ (reason-phrase +http-bad-request+) #\Return #\Linefeed
+            #\Return #\Linefeed #\Return #\Linefeed #\Return #\Linefeed additional-info #\Return #\Linefeed))
+   stream))

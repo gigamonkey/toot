@@ -26,6 +26,19 @@
 
 (in-package :toot)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Public API
+
+;; FIXME: if binary is nil, should we set external-format on the
+;; request so the content-type will get adjusted.
+(defun send-headers (request &key binary (external-format :utf-8))
+  "Send the headers and return a stream to which the body of the reply can be written."
+  (let ((stream (start-output request)))
+    (cond
+      (binary stream)
+      (t (flexi-streams:make-flexi-stream stream :external-format external-format)))))
+
+
 (defun serve-file (request pathname &optional content-type)
   "Serve the file denoted by PATHNAME. Sends a content type header
 corresponding to CONTENT-TYPE or \(if that is NIL) tries to determine
