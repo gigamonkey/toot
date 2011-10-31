@@ -26,25 +26,68 @@
 
 (in-package :toot)
 
-(defun create-prefix-dispatcher (prefix handler)
-  "Creates a request dispatch function which will dispatch to the
-function denoted by HANDLER if the file name of the current request
-starts with the string PREFIX."
+(defun make-prefix-handler (prefix sub-handler)
+  "Make a handler that handles the request with SUB-HANDLER if the
+file name of the request starts with the given prefix."
   (lambda (request)
-    (let ((mismatch (mismatch (script-name request) prefix
-                              :test #'char=)))
-      (and (or (null mismatch)
-               (>= mismatch (length prefix)))
-           handler))))
+    (let ((mismatch (mismatch (script-name request) prefix :test #'char=)))
+      (and (or (null mismatch) (>= mismatch (length prefix)))
+           (handle-request sub-handler request)))))
 
-(defun create-regex-dispatcher (regex handler)
-  "Creates a request dispatch function which will dispatch to the
-function denoted by HANDLER if the file name of the current request
-matches the CL-PPCRE regular expression REGEX."
+(defun make-regex-handler (regex sub-handler)
+  "Make a handler that handles the request with SUB-HANDLER if the
+file name of the request matches the CL-PPCRE regular expression
+REGEX."
   (let ((scanner (create-scanner regex)))
     (lambda (request)
       (and (scan scanner (script-name request))
-           handler))))
+           (handle-request sub-handler request)))))
+
+(defun make-exact-path-handler (path handler)
+  "Make a handler that handles the request with SUB-HANDLER if the
+file name of the request is exactyl the given PATH."
+  (lambda (request)
+    (and (string= path (script-name request)) (handle-request sub-handler request))))
+
+
+(defun serve-file (request pathname &optional content-type)
+  "Serve the file denoted by PATHNAME. Sends a content type header
+corresponding to CONTENT-TYPE or \(if that is NIL) tries to determine
+the content type via the file's suffix. Aborts the request with 404:
+Not found if the file does not exist. Also handles an
+if-modified-since request appropriately."
+  (when (or (wild-pathname-p pathname)
+            (not (fad:file-exists-p pathname))
+            (fad:directory-exists-p pathname))
+    (abort-request-handler request +http-not-found+))
+
+  (let ((time (or (file-write-date pathname) (get-universal-time))))
+
+    ;; FIXME: do we really need to set the headers even if we might
+    ;; send a not modified response? If not, let's check that first.
+    (setf (content-type request) (or content-type (guess-mime-type (pathname-type pathname))))
+    (setf (header-out :last-modified request) (rfc-1123-date time))
+    (setf (header-out :accept-ranges request) "bytes")
+
+    (handle-if-modified-since time request)
+
+    (with-open-file (file pathname :direction :input :element-type 'octet :if-does-not-exist nil)
+      (let ((bytes-to-send (maybe-handle-range-header request file)))
+        (setf (content-length request) bytes-to-send)
+
+        (let ((out (send-headers request :binary t))
+              (buf (make-array +buffer-length+ :element-type 'octet)))
+          #+:clisp
+          (setf (flexi-stream-element-type (content-stream (acceptor request))) 'octet)
+          (loop
+             (when (zerop bytes-to-send)
+               (return))
+             (let ((chunk-size (min +buffer-length+ bytes-to-send)))
+               (unless (eql chunk-size (read-sequence buf file :end chunk-size))
+                 (error "can't read from input file"))
+               (write-sequence buf out :end chunk-size)
+               (decf bytes-to-send chunk-size)))
+          (finish-output out))))))
 
 (defun maybe-handle-range-header (request file)
   "Helper function for serve-file. Determines whether the requests
@@ -73,93 +116,10 @@ matches the CL-PPCRE regular expression REGEX."
             (header-out :content-range request) (format nil "bytes ~D-~D/*" start end)))
     bytes-to-send))
 
-(defun serve-file (request pathname &optional content-type)
-  "Serve the file denoted by PATHNAME. Sends a content type header
-corresponding to CONTENT-TYPE or \(if that is NIL) tries to determine
-the content type via the file's suffix. Aborts the request with 404:
-Not found if the file does not exist. Also handles an
-if-modified-since request appropriately."
-  (when (or (wild-pathname-p pathname)
-            (not (fad:file-exists-p pathname))
-            (fad:directory-exists-p pathname))
-    (abort-request-handler request +http-not-found+))
-
-  (let ((time (or (file-write-date pathname) (get-universal-time))))
-
-    ;; FIXME: do we really need to set the headers even if we might
-    ;; send a not modified response? If not, let's check that first.
-    (setf (content-type request) (or content-type (guess-mime-type (pathname-type pathname))))
-    (setf (header-out :last-modified request) (rfc-1123-date time))
-    (setf (header-out :accept-ranges request) "bytes")
-
-    (handle-if-modified-since time request)
-
-    (with-open-file (file pathname :direction :input :element-type 'octet :if-does-not-exist nil)
-      (let ((bytes-to-send (maybe-handle-range-header request file)))
-        (setf (content-length request) bytes-to-send)
-
-        (let ((out (send-headers request))
-              (buf (make-array +buffer-length+ :element-type 'octet)))
-          #+:clisp
-          (setf (flexi-stream-element-type (content-stream (acceptor request))) 'octet)
-          (loop
-             (when (zerop bytes-to-send)
-               (return))
-             (let ((chunk-size (min +buffer-length+ bytes-to-send)))
-               (unless (eql chunk-size (read-sequence buf file :end chunk-size))
-                 (error "can't read from input file"))
-               (write-sequence buf out :end chunk-size)
-               (decf bytes-to-send chunk-size)))
-          (finish-output out))))))
-
-(defun create-static-file-dispatcher-and-handler (uri path &optional content-type)
-  "Creates and returns a request dispatch function which will dispatch
-to a handler function which emits the file denoted by the pathname
-designator PATH with content type CONTENT-TYPE if the SCRIPT-NAME of
-the request matches the string URI.  If CONTENT-TYPE is NIL, tries to
-determine the content type via the file's suffix."
-  ;; the dispatcher
-  (lambda (request)
-    (when (equal (script-name request) uri)
-      ;; the handler
-      (lambda (request)
-        (serve-file request path content-type)))))
-
 (defun enough-url (url url-prefix)
   "Returns the relative portion of URL relative to URL-PREFIX, similar
 to what ENOUGH-NAMESTRING does for pathnames."
   (subseq url (or (mismatch url url-prefix) (length url-prefix))))
-
-(defun create-folder-dispatcher-and-handler (uri-prefix base-path &optional content-type)
-  "Creates and returns a dispatch function which will dispatch to a
-handler function which emits the file relative to BASE-PATH that is
-denoted by the URI of the request relative to URI-PREFIX.  URI-PREFIX
-must be a string ending with a slash, BASE-PATH must be a pathname
-designator for an existing directory.  If CONTENT-TYPE is not NIL,
-it'll be the content type used for all files in the folder."
-  (unless (and (stringp uri-prefix)
-               (plusp (length uri-prefix))
-               (char= (char uri-prefix (1- (length uri-prefix))) #\/))
-    (parameter-error "~S must be string ending with a slash." uri-prefix))
-  (let ((name (pathname-name base-path))
-        (type (pathname-type base-path)))
-    (when (or (and name (not (eql name :unspecific)))
-              (and type (not (eql type :unspecific))))
-      (parameter-error "~S is supposed to denote a directory." base-path)))
-  (flet ((handler (request)
-           (let* ((script-name (url-decode (script-name request)))
-                  (script-path (enough-url (regex-replace-all "\\\\" script-name "/")
-                                           uri-prefix))
-                  (script-path-directory (pathname-directory script-path)))
-             (unless (or (stringp script-path-directory)
-                         (null script-path-directory)
-                         (and (listp script-path-directory)
-                              (eql (first script-path-directory) :relative)
-                              (loop for component in (rest script-path-directory)
-                                    always (stringp component))))
-               (abort-request-handler request +http-forbidden+))
-             (serve-file request (merge-pathnames script-path base-path) content-type))))
-    (create-prefix-dispatcher uri-prefix #'handler)))
 
 (defun no-cache (request)
   "Adds appropriate headers to completely prevent caching on most browsers."

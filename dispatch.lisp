@@ -47,11 +47,16 @@
 (defun test-document-directory (&optional sub-directory)
   (asdf:system-relative-pathname :toot (format nil "www/~@[~A~]" sub-directory)))
 
+;;; FIXME: this is perhaps not as correct as it should be. For
+;;; instance, it may not work on windows beacuse of \ vs /. See the
+;;; old create-folder-dispatcher-and-handler to see if there's any
+;;; goodness that needs to be brought over.
 (defun make-static-file-handler (document-root)
+  "Make a handler that maps the requested URI to a file under
+DOCUMENT-ROOT and serves it if it exists. Does a basic sanity check to
+dissalow requests for things like ../../../etc/passwd."
   (lambda (request)
     (let ((script-name (script-name request)))
-      (when (string= script-name "/fail")
-        (error "Boo!")) 
       (unless (safe-filename-p script-name)
         (abort-request-handler request +http-forbidden+))
       (serve-file request (resolve-file script-name document-root)))))

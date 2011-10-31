@@ -132,6 +132,7 @@
       (unless (typep (content-stream request) 'chunked-stream)
         (setf (content-stream request) (make-chunked-stream (content-stream request))))
       (setf (chunked-stream-output-chunking-p (content-stream request)) t))
+
     (content-stream request)))
 
 (defun send-response (request stream status-code &key headers cookies content)
@@ -186,9 +187,14 @@
     (finish-output stream)
     (close stream)))
 
-(defun send-headers (request)
+;; FIXME: if binary is nil, should we set external-format on the
+;; request so the content-type will get adjusted.
+(defun send-headers (request &key binary (external-format :utf-8))
   "Send the headers and return a stream to which the body of the reply can be written."
-  (start-output request))
+  (let ((stream (start-output request)))
+    (cond
+      (binary stream)
+      (t (flexi-streams:make-flexi-stream stream :external-format external-format)))))
 
 (defun read-initial-request-line (stream)
   (handler-case

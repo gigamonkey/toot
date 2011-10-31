@@ -91,6 +91,9 @@ NAME should be a keyword or a string."
   "Changes the current value of the outgoing http
 header named NAME \(a keyword or a string).  If a header with this
 name doesn't exist, it is created."
+  (when (headers-sent-p request)
+    (error "Can't set reply headers after headers have been sent."))
+
   (when (stringp name)
     (setf name (as-keyword name :destructivep nil)))
 
@@ -483,8 +486,7 @@ content even if the request method is not POST."
     (parameter-error "It doesn't make sense to set both FORCE-BINARY and FORCE-TEXT to a true value."))
   (unless (or external-format force-binary)
     (setf external-format (or (external-format-from-content-type (header-in :content-type request))
-                              (when force-text
-                                *default-external-format*))))
+                              (and force-text *default-external-format*))))
   (let ((raw-post-data (or (slot-value request 'raw-post-data)
                            (get-post-data request :want-stream want-stream))))
     (cond ((typep raw-post-data 'stream) raw-post-data)
