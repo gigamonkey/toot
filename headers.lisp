@@ -85,21 +85,57 @@
       (setf (content-type request) (maybe-add-charset-to-content-type-header 
                                     (content-type request)
                                     (external-format request))))
+
+    ;; FIXME: this should probably be within the preceeding WHEN.
     (when content
       ;; whenever we know what we're going to send out as content, set
       ;; the Content-Length header properly; maybe the user specified
       ;; a different content length, but that will be wrong anyway
       (setf (header-out :content-length request) (length content)))
 
-    ;; send headers only once
+
+    ;; If the handler calls send-headers, then we will get here with
+    ;; no content and need to send the headers. Then, after the
+    ;; handler returns, the acceptor will call start-output again and
+    ;; we'll end up here with still no content but with the headers
+    ;; sent, in which case we do nothing (and the return value is
+    ;; ignored).
+    ;;
+    ;; If, however, the handler didn't call send-headers, then
+    ;; start-output will be called for the first time from
+    ;; process-request after the handler returns with (presumably) a
+    ;; non-nil content, in which case we need to send the headers and
+    ;; then send the content.
+    ;;
+    ;; Finally, there's the wrinkle that either of those scenarios
+    ;; could also occur in response to a HEAD request in which case we
+    ;; want to skip sending the content anyway.
     (unless (headers-sent-p request)
       (let ((stream (content-stream request)))
 
-        (send-response stream request return-code :content (unless head-request-p content))
+        (when content
+          (unless head-request-p
+            (setf (content-length request) (length content))))
+        
+        (%send-headers stream request return-code)
+
+        (when content
+          (unless head-request-p
+            (write-sequence content stream)
+            (finish-output stream)))
       
-        ;; when processing a HEAD request, exit to return from PROCESS-REQUEST
+        ;; when processing a HEAD request, exit to return from
+        ;; PROCESS-REQUEST. In the case of a handler that calls
+        ;; send-header this will cause the handler to exit suddenly,
+        ;; before it outputs any content.
         (when head-request-p (throw 'request-processed nil))
-      
+        
+        ;;; This case is mostly (only?) interesting in the
+        ;;; send-headers case (and perhaps should be moved there)
+        ;;; since if we were called with content, it was already
+        ;;; written and the request has been processed and after
+        ;;; process-request returns the request whose content-stream
+        ;;; we are setting here will become garbage.
         (when chunkedp
           ;; turn chunking on after the headers have been sent
           (unless (typep (content-stream request) 'chunked-stream)
@@ -108,17 +144,7 @@
       
         (content-stream request)))))
 
-(defun send-response (stream request status-code &key content)
-  (when content (setf (content-length request) (length content)))
-
-  ;; I'm pretty sure this is not necessary since (setf
-  ;; content-length) takes care of setting the header in
-  ;; headers-out.
-  #+(or)(when (content-length request)
-          (if (assoc :content-length headers)
-              (setf (cdr (assoc :content-length headers)) (content-length request))
-              (push (cons :content-length (content-length request)) headers)))
-
+(defun %send-headers (stream request status-code)
   (log-access (access-logger (acceptor request)) request)
 
   ;; Read post data to clear stream - Force binary mode to avoid
@@ -131,12 +157,7 @@
     (write-cookies header-stream (cookies-out request))
     (format header-stream "~C~C" #\Return #\Linefeed))
 
-  (setf (headers-sent-p request) t)
-
-  (when content
-    (write-sequence content stream)
-    (finish-output stream)))
-
+  (setf (headers-sent-p request) t))
 
 (defun quick-send-response (stream status-code)
   "Send a response to the client before we've created a request
@@ -145,10 +166,10 @@ response. This happens so early that we can't even log it to the
 access log. Which is perhaps unfortunate."
   ;; We don't read post data to clear stream since we're just going to
   ;; close it anyway.
-  (with-open-stream (stream (make-header-stream))
-    (write-status-line header-stream status-code)
+  (with-open-stream (stream (make-header-stream stream))
+    (write-status-line stream status-code)
     (write-headers stream '((:content . 0)))
-    (format header-stream "~C~C" #\Return #\Linefeed)))
+    (format stream "~C~C" #\Return #\Linefeed)))
 
 (defun make-header-stream (stream)
   (let* ((client-header-stream (flex:make-flexi-stream stream :external-format :iso-8859-1)))
@@ -165,7 +186,7 @@ access log. Which is perhaps unfortunate."
 
 (defun write-cookies (stream cookies)
   (loop for (nil . cookie) in cookies
-     do (write-header-line "Set-Cookie" (stringify-cookie cookie) header-stream)))
+     do (write-header-line "Set-Cookie" (stringify-cookie cookie) stream)))
 
 (defun write-header-line (key value stream)
   (let ((string (princ-to-string value)))

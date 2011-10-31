@@ -722,9 +722,9 @@ chunked encoding, but acceptor is configured to not use it.")))))
                     (when (close-stream-p request) (return)))))
 
           (when content-stream
-            ;; as we are at the end of the request here, we ignore all
-            ;; errors that may occur while flushing and/or closing the
-            ;; stream.
+            ;; As we are at the end of the requests here, we ignore
+            ;; all errors that may occur while flushing and/or closing
+            ;; the stream.
             (ignore-errors* (force-output content-stream))
             (ignore-errors* (close content-stream :abort t))))))))
 
