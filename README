@@ -1,2 +1,5 @@
-Complete documentation for Hunchentoot including details about how to
-install it can be found in the 'doc' directory.
+Toot is a stripped down and hopefully simplified version of Edi
+Weitz's Hunchentoot. It does not aim to be backwards compatible with
+anything and large swaths of Hunchentoot functionality have been cut
+out. Some of them may be put back someday. Use at your own risk. If it
+breaks you get to keep both pieces, etc. etc.
