@@ -37,11 +37,11 @@
 
 (defun do-with-request-count-incremented (acceptor function)
   (with-lock-held ((shutdown-lock acceptor))
-    (incf (accessor-requests-in-progress acceptor)))
+    (incf (requests-in-progress acceptor)))
   (unwind-protect
        (funcall function)
     (with-lock-held ((shutdown-lock acceptor))
-      (decf (accessor-requests-in-progress acceptor))
+      (decf (requests-in-progress acceptor))
       (when (shutdown-p acceptor)
         (condition-notify (shutdown-queue acceptor))))))
 
@@ -57,8 +57,6 @@
   (:documentation "Used by acceptor to generate an error page for a
   request based on the http status code."))
 
-(defvar *default-logger* (make-instance 'stream-logger :destination *error-output*))
-
 (defclass acceptor ()
   ((port :initarg :port :reader port)
    (address :initarg :address :reader address)
@@ -71,12 +69,12 @@
    (listen-socket :initform nil :accessor listen-socket)
    (listen-backlog :initarg :listen-backlog :reader listen-backlog)
    (shutdown-p :initform t :accessor shutdown-p)
-   (requests-in-progress :initform 0 :accessor accessor-requests-in-progress)
+   (requests-in-progress :initform 0 :accessor requests-in-progress)
    (shutdown-queue :initform (make-condition-variable) :accessor shutdown-queue)
    (shutdown-lock :initform (make-lock "toot-shutdown") :accessor shutdown-lock)
    (access-loggger :initarg :access-logger :initform *default-logger* :accessor access-logger)
    (message-logger :initarg :message-logger :initform *default-logger* :accessor message-logger)
-   (ssl-adapter :initarg :ssl-adapter :accessor ssl-adapter)
+   (ssl-config :initarg :ssl-config :accessor ssl-config)
    (handler :initarg :handler :accessor handler)
    (error-generator :initarg :error-generator :accessor error-generator))
 
@@ -90,7 +88,7 @@
     :persistent-connections-p t
     :read-timeout *default-connection-timeout*
     :write-timeout *default-connection-timeout*
-    :ssl-adapter nil
+    :ssl-config nil
     :error-generator #'default-error-message-generator))
 
 (defmethod print-object ((acceptor acceptor) stream)
@@ -164,16 +162,16 @@
         ;; we assume it's not our fault...
         (setf (return-code request) +http-bad-request+)))))
 
-(defclass ssl-adapter ()
-  ((ssl-certificate-file :initarg :ssl-certificate-file :reader ssl-certificate-file)
-   (ssl-private-key-file :initarg :ssl-private-key-file :reader ssl-private-key-file)
-   (ssl-private-key-password :initform nil :initarg :ssl-private-key-password :reader ssl-private-key-password)))
+(defclass ssl-config ()
+  ((certificate-file :initarg :certificate-file :reader certificate-file)
+   (private-key-file :initarg :private-key-file :reader private-key-file)
+   (private-key-password :initform nil :initarg :private-key-password :reader private-key-password)))
 
-(defmethod initialize-instance :after ((adapter ssl-adapter) &key &allow-other-keys)
+(defmethod initialize-instance :after ((adapter ssl-config) &key &allow-other-keys)
   ;; OpenSSL doesn't know much about Lisp pathnames...
-  (with-slots (ssl-private-key-file ssl-certificate-file) adapter
-    (setf ssl-private-key-file (namestring (truename ssl-private-key-file)))
-    (setf ssl-certificate-file (namestring (truename ssl-certificate-file)))))
+  (with-slots (private-key-file certificate-file) adapter
+    (setf private-key-file (namestring (truename private-key-file)))
+    (setf certificate-file (namestring (truename certificate-file)))))
 
 ;;; Convenience methods to pass along log-message calls until we hit the actual logger.
 
@@ -264,7 +262,7 @@ name doesn't exist, it is created."
       ;; WHEN? The thread which called STOP is waiting here while all
       ;; the threads processing requests will signal on the
       ;; shutdown-queue
-      (when (plusp (accessor-requests-in-progress acceptor))
+      (when (plusp (requests-in-progress acceptor))
         (condition-wait (shutdown-queue acceptor) (shutdown-lock acceptor)))))
   (usocket:socket-close (listen-socket acceptor))
   (setf (listen-socket acceptor) nil)
@@ -415,19 +413,19 @@ chunked encoding, but acceptor is configured to not use it.")))))
 
 (defun make-socket-stream (socket acceptor)
   (let ((base-stream (usocket:socket-stream socket))
-        (ssl-adapter (ssl-adapter acceptor)))
+        (ssl-config (ssl-config acceptor)))
     (cond
-      (ssl-adapter (setup-ssl-stream ssl-adapter base-stream))
+      (ssl-config (setup-ssl-stream ssl-config base-stream))
       (t base-stream))))
 
 (defun setup-ssl-stream (adapter stream)
   ;; attach SSL to the stream if necessary
-  (with-slots (ssl-certificate-file ssl-private-key-file ssl-private-key-password) adapter
+  (with-slots (certificate-file private-key-file private-key-password) adapter
     (cl+ssl:make-ssl-server-stream 
      stream
-     :certificate ssl-certificate-file
-     :key ssl-private-key-file
-    :password ssl-private-key-password)))
+     :certificate certificate-file
+     :key private-key-file
+     :password private-key-password)))
 
 ;;; FIXME: possibly the call site of handler-incoming-connection
 ;;; should be set up to allow the taskmaster to simply signal a

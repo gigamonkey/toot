@@ -74,9 +74,15 @@ facility."
 (defgeneric log-message (logger log-level format-string &rest format-arguments)
   (:documentation "Write a log entry to the message log."))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Simple logger for logging to a stream
+
 (defclass stream-logger ()
   ((destination :initarg :destination :reader destination)
    (lock :initform (make-lock "log-lock") :reader lock)))
+
+(defvar *default-logger* (make-instance 'stream-logger :destination *error-output*))
 
 (defmethod  log-access ((logger stream-logger) request)
   (with-log-stream (stream (destination logger) (lock logger))
