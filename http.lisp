@@ -128,9 +128,7 @@
    ;; Internal foo
    (acceptor :initarg :acceptor :reader acceptor)
    (content-stream :initarg :content-stream :accessor content-stream)
-   (tmp-files :initform () :accessor tmp-files)
-   (aux-data :initform nil :accessor aux-data)
-   ))
+   (tmp-files :initform () :accessor tmp-files)))
 
 (defmethod initialize-instance :after ((request request) &rest init-args)
   (declare (ignore init-args))
@@ -946,40 +944,3 @@ returned."
            (setf start (1+ end))
            (when (<= (length string) start)
              (return)))))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Goofy aux values stuff
-
-(defun aux-request-value (symbol request)
-  "Returns the value associated with SYMBOL from the request object
-REQUEST \(the default is the current request) if it exists.  The
-second return value is true if such a value was found."
-  (when request
-    (let ((found (assoc symbol (aux-data request) :test #'eq)))
-      (values (cdr found) found))))
-
-(defsetf aux-request-value (symbol request)
-    (new-value)
-  "Sets the value associated with SYMBOL from the request object
-REQUEST. If there is already a value associated with SYMBOL it will be
-replaced."
-  (once-only (symbol)
-    (with-unique-names (place %request)
-      `(let* ((,%request ,request)
-              (,place (assoc ,symbol (aux-data ,%request) :test #'eq)))
-         (cond
-           (,place
-            (setf (cdr ,place) ,new-value))
-           (t
-            (push (cons ,symbol ,new-value)
-                  (aux-data ,%request))
-            ,new-value))))))
-
-(defun delete-aux-request-value (symbol request)
-  "Removes the value associated with SYMBOL from the request object
-REQUEST."
-  (when request
-    (setf (aux-data request)
-            (delete symbol (aux-data request)
-                    :key #'car :test #'eq)))
-  (values))

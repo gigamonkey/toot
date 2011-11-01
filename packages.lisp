@@ -105,7 +105,6 @@
            :message-logger
 
            :authorization
-           :aux-request-value
            :content-length
            :content-type
            :cookie-domain
@@ -120,7 +119,6 @@
            :cookies-in
            :cookies-out
            :default-document-directory
-           :delete-aux-request-value
            :escape-for-html
            :get-parameter
            :get-parameters
@@ -166,10 +164,10 @@
            :server-protocol
            :set-cookie
            :shutdown
-           :single-threaded-taskmaster
-           :ssl-p
+           :start-server
            :start
            :stop
+           :single-threaded-taskmaster
            :thread-per-connection-taskmaster
            :url-decode
            :url-encode
