@@ -29,6 +29,54 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public API
 
+(defun (setf content-type) (new-value request)
+  "Sets the outgoing 'Content-Type' http header of REQUEST."
+  (setf (header-out :content-type request) new-value))
+
+(defun (setf content-length) (new-value request)
+  "Sets the outgoing 'Content-Length' http header of REQUEST."
+  (setf (header-out :content-length request) new-value))
+
+(defun header-out-set-p (name request)
+  "Returns a true value if the outgoing http header named NAME has
+been specified already.  NAME should be a keyword or a string."
+  (assoc* name (headers-out request)))
+
+(defun cookie-out (name request)
+  "Returns the current value of the outgoing cookie named
+NAME. Search is case-sensitive."
+  (cdr (assoc name (cookies-out request) :test #'string=)))
+
+(defun header-out (name request)
+  "Returns the current value of the outgoing http header named NAME.
+NAME should be a keyword or a string."
+  (cdr (assoc name (headers-out request))))
+
+(defun (setf header-out) (new-value name request)
+  "Changes the current value of the outgoing http
+header named NAME \(a keyword or a string).  If a header with this
+name doesn't exist, it is created."
+  (when (headers-sent-p request)
+    (error "Can't set reply headers after headers have been sent."))
+
+  (when (stringp name)
+    (setf name (as-keyword name :destructivep nil)))
+
+  (let ((entry (assoc name (headers-out request))))
+    (if entry
+        (setf (cdr entry) new-value)
+        (setf (slot-value request 'headers-out)
+              (acons name new-value (headers-out request))))
+    new-value)
+
+  (case name
+    (:content-length
+     (check-type new-value integer)
+     (setf (slot-value request 'content-length) new-value))
+    (:content-type
+     (check-type new-value (or null string))
+     (setf (slot-value request 'content-type) new-value))))
+
 ;; FIXME: if binary is nil, should we set external-format on the
 ;; request so the content-type will get adjusted.
 (defun send-headers (request &key binary (external-format :utf-8))
@@ -154,6 +202,7 @@ if-modified-since request appropriately."
 (defun no-cache (request)
   "Adds appropriate headers to completely prevent caching on most browsers."
   (setf
+   ;; WTF is this date?! (Some cargo cult thing from PHP or maybe MSDN, it seems.)
    (header-out :expires request) "Mon, 26 Jul 1997 05:00:00 GMT"
    (header-out :cache-control request) "no-store, no-cache, must-revalidate, post-check=0, pre-check=0"
    (header-out :pragma request) "no-cache"
@@ -204,10 +253,28 @@ TIME."
       (abort-request-handler request +http-not-modified+))
     (values)))
 
+;; FIXME: (enough-url "/foo/bar/baz.html" "/www/") =>
+;; "foo/bar/baz.html" which is probably not right.
 (defun enough-url (url url-prefix)
   "Returns the relative portion of URL relative to URL-PREFIX, similar
 to what ENOUGH-NAMESTRING does for pathnames."
   (subseq url (or (mismatch url url-prefix) (length url-prefix))))
+
+(defun set-cookie (name request &key (value "") expires path domain secure http-only)
+  "Set a cookie to be sent with the reply."
+  (let ((place (assoc name (cookies-out request) :test #'string=))
+        (cookie (make-instance 'cookie
+                  :name name
+                  :value value
+                  :expires expires
+                  :path path
+                  :domain domain
+                  :secure secure
+                  :http-only http-only)))
+    (cond
+      (place (setf (cdr place) cookie))
+      (t (push (cons name cookie) (cookies-out request))))
+    cookie))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Internal

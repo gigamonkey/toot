@@ -154,6 +154,7 @@ implementations."))
          (>= (taskmaster-request-count taskmaster) (taskmaster-max-accept-count taskmaster))
          (>= (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster)))
      ;; Send HTTP 503 to indicate that we can't handle the request right now
+     (log-message acceptor :warning "Can't handle a new request, too many request threads already")
      (send-service-unavailable-reply acceptor socket))
     
     ((and (taskmaster-max-accept-count taskmaster)

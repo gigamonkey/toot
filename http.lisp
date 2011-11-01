@@ -173,9 +173,9 @@
    (private-key-file :initarg :private-key-file :reader private-key-file)
    (private-key-password :initform nil :initarg :private-key-password :reader private-key-password)))
 
-(defmethod initialize-instance :after ((adapter ssl-config) &key &allow-other-keys)
+(defmethod initialize-instance :after ((ssl ssl-config) &key &allow-other-keys)
   ;; OpenSSL doesn't know much about Lisp pathnames...
-  (with-slots (private-key-file certificate-file) adapter
+  (with-slots (private-key-file certificate-file) ssl
     (setf private-key-file (namestring (truename private-key-file)))
     (setf certificate-file (namestring (truename certificate-file)))))
 
@@ -187,57 +187,6 @@
 (defmethod log-message ((request request) log-level format-string &rest format-arguments)
   (apply #'log-message (acceptor request) log-level format-string format-arguments))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; API functions
-
-(defun (setf content-type) (new-value request)
-  "Sets the outgoing 'Content-Type' http header of REQUEST."
-  (setf (header-out :content-type request) new-value))
-
-(defun (setf content-length) (new-value request)
-  "Sets the outgoing 'Content-Length' http header of REQUEST."
-  (setf (header-out :content-length request) new-value))
-
-(defun header-out-set-p (name request)
-  "Returns a true value if the outgoing http header named NAME has
-been specified already.  NAME should be a keyword or a string."
-  (assoc* name (headers-out request)))
-
-(defun cookie-out (name request)
-  "Returns the current value of the outgoing cookie named
-NAME. Search is case-sensitive."
-  (cdr (assoc name (cookies-out request) :test #'string=)))
-
-(defun header-out (name request)
-  "Returns the current value of the outgoing http header named NAME.
-NAME should be a keyword or a string."
-  (cdr (assoc name (headers-out request))))
-
-(defun (setf header-out) (new-value name request)
-  "Changes the current value of the outgoing http
-header named NAME \(a keyword or a string).  If a header with this
-name doesn't exist, it is created."
-  (when (headers-sent-p request)
-    (error "Can't set reply headers after headers have been sent."))
-
-  (when (stringp name)
-    (setf name (as-keyword name :destructivep nil)))
-
-  (let ((entry (assoc name (headers-out request))))
-    (if entry
-        (setf (cdr entry) new-value)
-        (setf (slot-value request 'headers-out)
-              (acons name new-value (headers-out request))))
-    new-value)
-
-  (case name
-    (:content-length
-     (check-type new-value integer)
-     (setf (slot-value request 'content-length) new-value))
-    (:content-type
-     (check-type new-value (or null string))
-     (setf (slot-value request 'content-type) new-value))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Start and stop the server
@@ -440,11 +389,22 @@ chunked encoding, but acceptor is configured to not use it.")))))
   "Send a response to the client before we've created a request
 object. This can be used by taskmasters when they cannot accept a
 connection."
-  (log-message acceptor :warning "Can't handle a new request, too many request threads already")
-  (with-open-stream (stream (make-header-stream (make-socket-stream socket acceptor)))
-    (write-status-line stream +http-service-unavailable+)
-    (write-headers stream '((:content . 0)))
-    (format stream "~C~C" #\Return #\Linefeed)))
+  (write-simple-reply 
+   (make-header-stream (make-socket-stream socket acceptor))
+   +http-service-unavailable+
+    ;; FIXME: hmmm. this was :content rather than :content-length but
+    ;; I'm thinking that was a translation error. check. And maybe
+    ;; more to the point, it should be :connection . "close" like in
+    ;; send-bad-request-response.
+   '((:content-length . 0))
+   nil))
+
+(defun write-simple-reply (stream status-code headers content)
+  (with-open-stream (s stream)
+    (write-status-line stream status-code)
+    (write-headers stream headers)
+    (write-line-crlf stream "")
+    (when content (write-line-crlf stream content))))
 
 (defun unchunked-stream (stream)
   (cond 
@@ -545,8 +505,6 @@ process whatever string values the rfc2388 package has returned."
   (flex:octets-to-string (map '(vector (unsigned-byte 8) *) 'char-code string)
                          :external-format external-format))
 
-
-
 (defun parse-multipart-form-data (request external-format)
   "Parse the REQUEST body as multipart/form-data, assuming that its
 content type has already been verified.  Returns the form data as
@@ -593,7 +551,7 @@ supposed to be of content type 'multipart/form-data'."
 
 
 
-;;; FIXME: Is this actually useful? Either its part of the API or it
+;;; FIXME: Is this actually useful? Either it's part of the API or it
 ;;; should be axed.
 (defun recompute-request-parameters (request &key (external-format *default-external-format*))
   "Recomputes the GET and POST parameters for the REQUEST object
@@ -743,6 +701,7 @@ already been read."
                 while (= pos +buffer-length+)
                 finally (return content)))))))
 
+;; FIXME: why is this HTTP/1.0?
 (defun send-bad-request-response (stream &optional additional-info)
   (write-sequence 
    (flex:string-to-octets
@@ -772,6 +731,11 @@ returned."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Reply -- sending back the HTTP reply.
 
+;; FIXME: technically a HEAD request SHOULD still have a
+;; Content-Length header specifying "the size of the entity-body that
+;; would have been sent had the request been a GET". Though that's
+;; hard to do in the case where the handler writes to a stream. But
+;; it's not MUST so maybe ignore.
 (defun start-output (request &optional (content nil content-provided-p))
   "Start sending the reply."
   (let* ((return-code (return-code request))
@@ -799,6 +763,8 @@ returned."
       (when chunkedp
         (setf (header-out :transfer-encoding request) "chunked"))
 
+      ;; FIXME: it's possible we don't set a :connection header at
+      ;; all. Is that okay?
       (cond 
         (keep-alive-p
          (setf (close-stream-p request) nil)
@@ -873,10 +839,11 @@ returned."
         
         ;;; This case is mostly (only?) interesting in the
         ;;; send-headers case (and perhaps should be moved there)
-        ;;; since if we were called with content, it was already
-        ;;; written and the request has been processed and after
-        ;;; process-request returns the request whose content-stream
-        ;;; we are setting here will become garbage.
+        ;;; since if we were called with content, it has, by the
+        ;;; point, already been written and the request has been
+        ;;; processed and after process-request returns the request
+        ;;; whose content-stream we are setting here will become
+        ;;; garbage.
         (when chunkedp
           ;; turn chunking on after the headers have been sent
           (unless (typep (content-stream request) 'chunked-stream)
@@ -896,7 +863,7 @@ returned."
     (write-status-line header-stream status-code)
     (write-headers header-stream (headers-out request))
     (write-cookies header-stream (cookies-out request))
-    (format header-stream "~C~C" #\Return #\Linefeed))
+    (write-line-crlf stream ""))
 
   (setf (headers-sent-p request) t))
 
@@ -907,6 +874,8 @@ returned."
         (make-broadcast-stream *header-stream* client-header-stream)
         client-header-stream)))
 
+;; FIXME: if there is a charset= in the content-type, should me check
+;; that it matches the given external-format
 (defun maybe-add-charset-to-content-type-header (content-type external-format)
   (if (and (cl-ppcre:scan "(?i)^text" content-type)
            (not (cl-ppcre:scan "(?i);\\s*charset=" content-type)))
@@ -936,15 +905,11 @@ returned."
     (write-char #\Space stream)
     (let ((start 0))
       (loop
-         (let ((end (or (position #\Newline string :start start)
-                        (length string))))
+         (let ((end (or (position #\Newline string :start start) (length string))))
            ;; skip empty lines, as they confuse certain HTTP clients
            (unless (eql start end)
-             (unless (zerop start)
-               (write-char #\Tab stream))
+             (unless (zerop start) (write-char #\Tab stream))
              (write-string string stream :start start :end end)
-             (write-char #\Return stream)
-             (write-char #\Linefeed stream))
+             (write-line-crlf stream ""))
            (setf start (1+ end))
-           (when (<= (length string) start)
-             (return)))))))
+           (when (<= (length string) start) (return)))))))
