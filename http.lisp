@@ -58,25 +58,31 @@
   request based on the http status code."))
 
 (defclass acceptor ()
-  ((port :initarg :port :reader port)
+  (
+   ;; Configuration
+   (port :initarg :port :reader port)
    (address :initarg :address :reader address)
-   (taskmaster :initarg :taskmaster :reader taskmaster)
    (output-chunking-p :initarg :output-chunking-p :accessor output-chunking-p)
    (input-chunking-p :initarg :input-chunking-p :accessor input-chunking-p)
    (persistent-connections-p :initarg :persistent-connections-p :accessor persistent-connections-p)
    (read-timeout :initarg :read-timeout :reader read-timeout)
    (write-timeout :initarg :write-timeout :reader write-timeout)
-   (listen-socket :initform nil :accessor listen-socket)
    (listen-backlog :initarg :listen-backlog :reader listen-backlog)
+   (ssl-config :initarg :ssl-config :accessor ssl-config)
+
+   ;; Plugins
+   (handler :initarg :handler :accessor handler)
+   (error-generator :initarg :error-generator :accessor error-generator)
+   (taskmaster :initarg :taskmaster :reader taskmaster)
+   (access-loggger :initarg :access-logger :initform *default-logger* :accessor access-logger)
+   (message-logger :initarg :message-logger :initform *default-logger* :accessor message-logger)
+
+   ;; State
+   (listen-socket :initform nil :accessor listen-socket)
    (shutdown-p :initform t :accessor shutdown-p)
    (requests-in-progress :initform 0 :accessor requests-in-progress)
    (shutdown-queue :initform (make-condition-variable) :accessor shutdown-queue)
-   (shutdown-lock :initform (make-lock "toot-shutdown") :accessor shutdown-lock)
-   (access-loggger :initarg :access-logger :initform *default-logger* :accessor access-logger)
-   (message-logger :initarg :message-logger :initform *default-logger* :accessor message-logger)
-   (ssl-config :initarg :ssl-config :accessor ssl-config)
-   (handler :initarg :handler :accessor handler)
-   (error-generator :initarg :error-generator :accessor error-generator))
+   (shutdown-lock :initform (make-lock "toot-shutdown") :accessor shutdown-lock))
 
   (:default-initargs
     :address nil
