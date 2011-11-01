@@ -196,15 +196,6 @@ implementations."))
     (loop until (< (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster))
           do (condition-wait (taskmaster-wait-queue taskmaster) (taskmaster-wait-lock taskmaster)))))
 
-(defun send-service-unavailable-reply (acceptor socket)
-  "A helper function to send out a quick error reply, before any state
-is set up via PROCESS-REQUEST."
-  (log-message acceptor :warning "Can't handle a new request, too many request threads already")
-  (quick-send-response 
-   (make-socket-stream socket acceptor)
-   +http-service-unavailable+))
-
-
 (defun create-connection-handler-thread (taskmaster acceptor socket)
   "Create a thread for handling a single request"
   ;; we are handling all conditions here as we want to make sure that

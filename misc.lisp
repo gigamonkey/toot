@@ -38,6 +38,79 @@
       (binary stream)
       (t (flexi-streams:make-flexi-stream stream :external-format external-format)))))
 
+(defun abort-request-handler (request response-status-code &optional body)
+  "Abort the handling of a request, sending instead a response with
+the given response-status-code. A request can only be aborted if
+SEND-HEADERS has not been called."
+  (setf (return-code request) response-status-code)
+  (throw 'handler-done body))
+
+(defun authorization (request)
+  "Returns as two values the user and password \(if any) as encoded in
+the 'AUTHORIZATION' header.  Returns NIL if there is no such header."
+  (let* ((authorization (header-in :authorization request))
+         (start (and authorization
+                     (> (length authorization) 5)
+                     (string-equal "Basic" authorization :end2 5)
+                     (scan "\\S" authorization :start 5))))
+    (when start
+      (destructuring-bind (&optional user password)
+          (split ":" (base64:base64-string-to-string (subseq authorization start)))
+        (values user password)))))
+
+(defun host (request)
+  "Returns the 'Host' incoming http header value."
+  (header-in :host request))
+
+(defun user-agent (request)
+  "Returns the 'User-Agent' http header."
+  (header-in :user-agent request))
+
+(defun header-in (name request)
+  "Returns the incoming header with name NAME. NAME can be a keyword
+  \(recommended) or a string."
+  (cdr (assoc* name (headers-in request))))
+
+(defun cookie-in (name request)
+  "Returns the cookie with the name NAME \(a string) as sent by the
+browser - or NIL if there is none."
+  (cdr (assoc name (cookies-in request) :test #'string=)))
+
+(defun referer (request)
+  "Returns the 'Referer' \(sic!) http header."
+  (header-in :referer request))
+
+(defun get-parameter (name request)
+  "Returns the GET parameter with name NAME \(a string) - or NIL if
+there is none.  Search is case-sensitive."
+  (cdr (assoc name (get-parameters request) :test #'string=)))
+
+(defun post-parameter (name request)
+  "Returns the POST parameter with name NAME \(a string) - or NIL if
+there is none.  Search is case-sensitive."
+  (cdr (assoc name (post-parameters request) :test #'string=)))
+
+(defun parameter (name request)
+  "Returns the GET or the POST parameter with name NAME \(a string) -
+or NIL if there is none.  If both a GET and a POST parameter with the
+same name exist the GET parameter is returned.  Search is
+case-sensitive."
+  (or (get-parameter name request) (post-parameter name request)))
+
+
+(defun real-remote-addr (request)
+  "Returns the 'X-Forwarded-For' incoming http header as the
+second value in the form of a list of IP addresses and the first
+element of this list as the first value if this header exists.
+Otherwise returns the value of REMOTE-ADDR as the only value."
+  (let ((x-forwarded-for (header-in :x-forwarded-for request)))
+    (cond (x-forwarded-for (let ((addresses (split "\\s*,\\s*" x-forwarded-for)))
+                             (values (first addresses) addresses)))
+          (t (remote-addr request)))))
+
+
+
+
 
 (defun serve-file (request pathname &optional content-type)
   "Serve the file denoted by PATHNAME. Sends a content type header
