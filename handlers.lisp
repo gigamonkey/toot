@@ -49,16 +49,19 @@
 ;;; instance, it may not work on windows beacuse of \ vs /. See the
 ;;; old create-folder-dispatcher-and-handler to see if there's any
 ;;; goodness that needs to be brought over.
-(defun make-static-file-handler (document-root)
+(defun make-static-file-handler (document-root &optional uri-prefix)
   "Make a handler that maps the requested URI to a file under
 DOCUMENT-ROOT and serves it if it exists. Does a basic sanity check to
 dissalow requests for things like ../../../etc/passwd. Also maps
-directory names to index.html in that directory."
+directory names to index.html in that directory. If URI-PREFIX is
+supplied, it will strip that from the URI before mapping it to a
+file."
   (lambda (request)
-    (let ((script-name (script-name request)))
+    (let ((script-name (url-decode (script-name request))))
       (unless (safe-filename-p script-name)
         (abort-request-handler request +http-forbidden+))
-      (serve-file request (resolve-file script-name document-root)))))
+      (let ((file (resolve-file (enough-url script-name uri-prefix) document-root)))
+        (serve-file request file)))))
 
 (defun safe-filename-p (script-name)
   "Verify that a script-name, translated to a file doesn't contain any
@@ -71,10 +74,10 @@ tricky bits such as '..'"
              (every #'stringp (rest directory))))))
 
 (defun resolve-file (script-name document-root)
-  (merge-pathnames (script-name-to-filename script-name) document-root))
+  (merge-pathnames (add-index (subseq script-name 1)) document-root))
 
-(defun script-name-to-filename (script-name)
-  (if (equal script-name "/") "index.html" (subseq script-name 1)))
+(defun add-index (filename &key (extension "html"))
+  (format nil "~a~@[index~*~@[.~a~]~]" filename (ends-with #\/ filename) extension))
 
 (defun make-prefix-handler (prefix sub-handler)
   "Make a handler that handles the request with SUB-HANDLER if the
@@ -83,6 +86,14 @@ file name of the request starts with the given prefix."
     (let ((mismatch (mismatch (script-name request) prefix :test #'char=)))
       (maybe-handle (or (null mismatch) (>= mismatch (length prefix)))
         (handle-request sub-handler request)))))
+
+(defun make-prefix-directory-handler (uri-prefix document-root)
+  "Make a handler that handles URIs with a given prefix, serving them
+with files under a given DOCUMENT-ROOT after stripping the prefix from
+the URI."
+  (make-prefix-handler 
+   uri-prefix
+   (make-static-file-handler document-root (subseq uri-prefix 0 (1- (length uri-prefix))))))
 
 (defun make-regex-handler (regex sub-handler)
   "Make a handler that handles the request with SUB-HANDLER if the
@@ -95,7 +106,7 @@ REGEX."
 
 (defun make-exact-path-handler (path sub-handler)
   "Make a handler that handles the request with SUB-HANDLER if the
-file name of the request is exactyl the given PATH."
+file name of the request is exactly the given PATH."
   (lambda (request)
     (maybe-handle (string= path (script-name request))
       (handle-request sub-handler request))))
