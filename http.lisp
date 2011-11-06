@@ -62,8 +62,6 @@
    ;; Configuration
    (port :initarg :port :reader port)
    (address :initarg :address :reader address)
-   (output-chunking-p :initarg :output-chunking-p :accessor output-chunking-p)
-   (input-chunking-p :initarg :input-chunking-p :accessor input-chunking-p)
    (persistent-connections-p :initarg :persistent-connections-p :accessor persistent-connections-p)
    (read-timeout :initarg :read-timeout :reader read-timeout)
    (write-timeout :initarg :write-timeout :reader write-timeout)
@@ -89,8 +87,6 @@
     :port 80
     :listen-backlog 50
     :taskmaster (make-instance *default-taskmaster-class*)
-    :output-chunking-p t
-    :input-chunking-p t
     :persistent-connections-p t
     :read-timeout *default-connection-timeout*
     :write-timeout *default-connection-timeout*
@@ -284,13 +280,9 @@ different thread than accept-connection is running in."
                       (setf transfer-encodings (split "\\s*,\\s*" transfer-encodings))
 
                       (when (member "chunked" transfer-encodings :test #'equalp)
-                        (cond 
-                          ((input-chunking-p acceptor)
-                           ;; turn chunking on before we read the request body
-                           (setf content-stream (make-chunked-stream content-stream))
-                           (setf (chunked-stream-input-chunking-p content-stream) t))
-                          (t (toot-error "Client tried to use ~
-chunked encoding, but acceptor is configured to not use it.")))))
+                        ;; turn chunking on before we read the request body
+                        (setf content-stream (make-chunked-stream content-stream))
+                        (setf (chunked-stream-input-chunking-p content-stream) t)))
 
                     (multiple-value-bind (remote-addr remote-port)
                         (get-peer-address-and-port socket)
@@ -740,8 +732,7 @@ returned."
   "Start sending the reply."
   (let* ((return-code (return-code request))
          (acceptor (acceptor request))
-         (chunkedp (and (output-chunking-p acceptor)
-                        (eql (server-protocol request) :http/1.1)
+         (chunkedp (and (eql (server-protocol request) :http/1.1)
                         ;; only turn chunking on if the content
                         ;; length is unknown at this point...
                         (null (or (content-length request) content-provided-p))))
