@@ -276,7 +276,7 @@ The second return value denotes whether the client has explicitly
 asked for a persistent connection."
   (let ((connection-values
          ;; the header might consist of different values separated by commas
-         (when-let (connection-header (header-in :connection request))
+         (when-let (connection-header (request-header :connection request))
            (split "\\s*,\\s*" connection-header))))
     (flet ((connection-value-p (value)
              (member value connection-values :test #'string-equal)))

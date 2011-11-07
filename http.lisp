@@ -114,7 +114,7 @@
    (get-parameters :initform nil :reader get-parameters) 
    (post-parameters :initform nil :reader post-parameters)
    (raw-post-data :initform nil)
-   (headers-in :initarg :headers-in :reader headers-in)
+   (request-headers :initarg :request-headers :reader request-headers)
    (cookies-in :initform nil :reader cookies-in)
 
    ;; Information used in generating the reply
@@ -122,7 +122,7 @@
    (content-length :initform nil :accessor content-length)
    (content-type :initform *default-content-type* :accessor content-type)
    (response-charset :initform *default-charset* :accessor response-charset)
-   (headers-out :initform nil :reader headers-out)
+   (response-headers :initform nil :accessor response-headers)
    (cookies-out :initform nil :accessor cookies-out)
 
    ;; Lifecycle control
@@ -136,7 +136,7 @@
 
 (defmethod initialize-instance :after ((request request) &key &allow-other-keys)
 
-  (with-slots (headers-in cookies-in get-parameters script-name query-string) request
+  (with-slots (request-headers cookies-in get-parameters script-name query-string) request
     (handler-case*
         (progn
           (let* ((uri (request-uri request))
@@ -166,7 +166,7 @@
           ;; separate cookies.
           (setf cookies-in
                 (form-url-encoded-list-to-alist
-                 (split "\\s*[,;]\\s*" (cdr (assoc :cookie headers-in)))
+                 (split "\\s*[,;]\\s*" (cdr (assoc :cookie request-headers)))
                  +utf-8+)))
 
       (error (condition)
@@ -279,12 +279,12 @@ different thread than accept-connection is running in."
              (loop 
                 (when (shutdown-p acceptor) (return))
                 
-                (multiple-value-bind (headers-in request-method url-string protocol)
+                (multiple-value-bind (request-headers request-method url-string protocol)
                     (read-request content-stream)
                   ;; check if there was a request at all
                   (unless request-method (return))
                   (let ((request nil)
-                        (transfer-encodings (cdr (assoc* :transfer-encoding headers-in))))
+                        (transfer-encodings (cdr (assoc* :transfer-encoding request-headers))))
 
                     (when transfer-encodings
                       (setf transfer-encodings (split "\\s*,\\s*" transfer-encodings))
@@ -301,7 +301,7 @@ different thread than accept-connection is running in."
                                            :acceptor acceptor
                                            :remote-addr remote-addr
                                            :remote-port remote-port
-                                           :headers-in headers-in
+                                           :request-headers request-headers
                                            :content-stream content-stream
                                            :request-method request-method
                                            :uri url-string
@@ -498,7 +498,7 @@ alist or NIL if there was no data or the data could not be parsed."
         (prog1
             (parse-rfc2388-form-data
              content-stream
-             (header-in :content-type request)
+             (request-header :content-type request)
              external-format
              (make-tmp-filename-generator request))
           (let ((stray-data (read-request-body request :already-read (flexi-stream-position content-stream))))
@@ -564,20 +564,20 @@ EXTERNAL-FORMAT specifies the external format of the data in the
 request body. By default, the encoding is determined from the
 Content-Type header of the request or from *DEFAULT-EXTERNAL-FORMAT*
 if none is found."
-  (when (and (header-in :content-type request)
+  (when (and (request-header :content-type request)
              (member (request-method request) *methods-for-post-parameters* :test #'eq)
              (or force
                  (not (slot-value request 'raw-post-data)))
 	     ;; can't reparse multipart posts, even when FORCEd
 	     (not (eql t (slot-value request 'raw-post-data))))
-    (unless (or (header-in :content-length request)
+    (unless (or (request-header :content-length request)
                 (chunking-input-p request))
       (log-message request :warning "Can't read request body because there's ~
 no Content-Length header and input chunking is off.")
       (return-from maybe-read-post-parameters nil))
     (handler-case*
         (multiple-value-bind (type subtype charset)
-              (parse-content-type-header (header-in :content-type request))
+              (parse-content-type-header (request-header :content-type request))
           (let ((external-format (or external-format
                                      (when charset
                                        (handler-case
@@ -639,7 +639,7 @@ content even if the request method is not POST."
     (parameter-error "It doesn't make sense to set both FORCE-BINARY and FORCE-TEXT to a true value."))
 
   (unless (or external-format force-binary)
-    (setf external-format (or (external-format-from-content-type (header-in :content-type request))
+    (setf external-format (or (external-format-from-content-type (request-header :content-type request))
                               (and force-text *default-external-format*))))
   (let ((raw-post-data (or (slot-value request 'raw-post-data)
                            (read-request-body request :want-stream want-stream))))
@@ -655,8 +655,8 @@ content even if the request method is not POST."
 object.  Returns just the stream if WANT-STREAM is true.  If there's a
 Content-Length header, it is assumed, that ALREADY-READ octets have
 already been read."
-  (let* ((headers-in (headers-in request))
-         (content-length (when-let (content-length-header (cdr (assoc :content-length headers-in)))
+  (let* ((request-headers (request-headers request))
+         (content-length (when-let (content-length-header (cdr (assoc :content-length request-headers)))
                            (parse-integer content-length-header :junk-allowed t)))
          (content-stream (content-stream request)))
     (setf (slot-value request 'raw-post-data)
@@ -772,7 +772,7 @@ flexi-stream based on the content-type and charset, if needed."
   (let ((stream (content-stream request)))
     (let ((header-stream (make-header-stream stream)))
       (write-status-line header-stream (status-code request))
-      (write-headers header-stream (headers-out request))
+      (write-headers header-stream (response-headers request))
       (write-cookies header-stream (cookies-out request))
       (write-line-crlf header-stream ""))
     (setf (headers-sent-p request) t)
@@ -780,7 +780,7 @@ flexi-stream based on the content-type and charset, if needed."
 
 (defun finalize-response-headers (request)
   "Set certain headers automatically based on values in the request object."
-  (flet ((set-header (name value) (setf (header-out name request) value)))
+  (flet ((set-header (name value) (setf (response-header name request) value)))
 
     (set-header :date (rfc-1123-date))
     (set-header :content-type (full-content-type request))

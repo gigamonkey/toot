@@ -122,10 +122,8 @@
            :get-parameters
            :handle-if-modified-since
            :serve-file
-           :header-in
-           :header-out
-           :headers-in
-           :headers-out
+           :request-header
+           :response-header
            :host
            :http-token-p
            :toot-condition

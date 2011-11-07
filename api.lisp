@@ -34,12 +34,12 @@
 NAME. Search is case-sensitive."
   (cdr (assoc name (cookies-out request) :test #'string=)))
 
-(defun header-out (name request)
+(defun response-header (name request)
   "Returns the current value of the outgoing http header named NAME.
 NAME should be a keyword or a string."
-  (cdr (assoc name (headers-out request))))
+  (cdr (assoc name (response-headers request))))
 
-(defun (setf header-out) (new-value name request)
+(defun (setf response-header) (new-value name request)
   "Changes the current value of the outgoing http header named NAME
 \(a keyword or a string). If a header with this name doesn't exist, it
 is created."
@@ -49,26 +49,27 @@ is created."
   (when (stringp name)
     (setf name (as-keyword name :destructivep nil)))
 
-  (let ((entry (assoc name (headers-out request))))
+  (let ((entry (assoc name (response-headers request))))
     (if entry
         (setf (cdr entry) new-value)
-        (setf (slot-value request 'headers-out)
-              (acons name new-value (headers-out request))))
-    new-value)
+        (push (cons name new-value) (response-headers request)))
 
-  ;; Special case these two. This is kind of hinky, but we need to set
-  ;; the slots if these are set since the slot values will be used in
-  ;; finalize-response-headers to set the actual header. Note that
-  ;; this relation is not directly symmetical. Setting the slot in the
-  ;; object does not immediately set the value in the headers alist.
-  ;; But it will eventually affect it in finalize-response-headers.
-  (case name
-    (:content-length
-     (check-type new-value integer)
-     (setf (content-length request) new-value))
-    (:content-type
-     (check-type new-value (or null string))
-     (setf (content-type request) new-value))))
+    ;; Special case these two. This is kind of hinky, but we need to set
+    ;; the slots if these are set since the slot values will be used in
+    ;; finalize-response-headers to set the actual header. Note that
+    ;; this relation is not directly symmetical. Setting the slot in the
+    ;; object does not immediately set the value in the headers alist.
+    ;; But it will eventually affect it in finalize-response-headers.
+    (case name
+      (:content-length
+       (check-type new-value integer)
+       (setf (content-length request) new-value))
+      (:content-type
+       (check-type new-value (or null string))
+       (setf (content-type request) new-value)))
+
+
+    new-value))
 
 (defun send-headers (request &key
                      (content-type *default-content-type*)
@@ -95,7 +96,7 @@ SEND-HEADERS has not been called."
 (defun authorization (request)
   "Returns as two values the user and password \(if any) as encoded in
 the 'AUTHORIZATION' header.  Returns NIL if there is no such header."
-  (let* ((authorization (header-in :authorization request))
+  (let* ((authorization (request-header :authorization request))
          (start (and authorization
                      (> (length authorization) 5)
                      (string-equal "Basic" authorization :end2 5)
@@ -107,16 +108,16 @@ the 'AUTHORIZATION' header.  Returns NIL if there is no such header."
 
 (defun host (request)
   "Returns the 'Host' incoming http header value."
-  (header-in :host request))
+  (request-header :host request))
 
 (defun user-agent (request)
   "Returns the 'User-Agent' http header."
-  (header-in :user-agent request))
+  (request-header :user-agent request))
 
-(defun header-in (name request)
+(defun request-header (name request)
   "Returns the incoming header with name NAME. NAME can be a keyword
   \(recommended) or a string."
-  (cdr (assoc* name (headers-in request))))
+  (cdr (assoc* name (request-headers request))))
 
 (defun cookie-in (name request)
   "Returns the cookie with the name NAME \(a string) as sent by the
@@ -125,7 +126,7 @@ browser - or NIL if there is none."
 
 (defun referer (request)
   "Returns the 'Referer' \(sic!) http header."
-  (header-in :referer request))
+  (request-header :referer request))
 
 (defun get-parameter (name request)
   "Returns the GET parameter with name NAME \(a string) - or NIL if
@@ -150,7 +151,7 @@ case-sensitive."
 second value in the form of a list of IP addresses and the first
 element of this list as the first value if this header exists.
 Otherwise returns the value of REMOTE-ADDR as the only value."
-  (let ((x-forwarded-for (header-in :x-forwarded-for request)))
+  (let ((x-forwarded-for (request-header :x-forwarded-for request)))
     (cond (x-forwarded-for (let ((addresses (split "\\s*,\\s*" x-forwarded-for)))
                              (values (first addresses) addresses)))
           (t (remote-addr request)))))
@@ -172,8 +173,8 @@ if-modified-since request appropriately."
 
     ;; FIXME: do we really need to set the headers even if we might
     ;; send a not modified response? If not, let's check that first.
-    (setf (header-out :last-modified request) (rfc-1123-date time))
-    (setf (header-out :accept-ranges request) "bytes")
+    (setf (response-header :last-modified request) (rfc-1123-date time))
+    (setf (response-header :accept-ranges request) "bytes")
 
     (handle-if-modified-since time request)
 
@@ -204,10 +205,10 @@ if-modified-since request appropriately."
   "Adds appropriate headers to completely prevent caching on most browsers."
   (setf
    ;; WTF is this date?! (Some cargo cult thing from PHP or maybe MSDN, it seems.)
-   (header-out :expires request) "Mon, 26 Jul 1997 05:00:00 GMT"
-   (header-out :cache-control request) "no-store, no-cache, must-revalidate, post-check=0, pre-check=0"
-   (header-out :pragma request) "no-cache"
-   (header-out :last-modified request) (rfc-1123-date))
+   (response-header :expires request) "Mon, 26 Jul 1997 05:00:00 GMT"
+   (response-header :cache-control request) "no-store, no-cache, must-revalidate, post-check=0, pre-check=0"
+   (response-header :pragma request) "no-cache"
+   (response-header :last-modified request) (rfc-1123-date))
   (values))
 
 (defun redirect (request target &key
@@ -232,13 +233,13 @@ If CODE is a 3xx redirection code, it will be sent as status code."
                          (first (ppcre:split ":" (or host "")))
                          host)
                        port target))))
-    (setf (header-out :location request) url)
+    (setf (response-header :location request) url)
     (abort-request-handler request code)))
 
 (defun require-authorization (request &optional (realm "Toot"))
   "Sends back appropriate headers to require basic HTTP authentication
 \(see RFC 2617) for the realm REALM."
-  (setf (header-out :www-authenticate request)
+  (setf (response-header :www-authenticate request)
         (format nil "Basic realm=\"~A\"" (quote-string realm)))
   (abort-request-handler request +http-authorization-required+))
 
@@ -246,7 +247,7 @@ If CODE is a 3xx redirection code, it will be sent as status code."
   "Handles the 'If-Modified-Since' header of REQUEST.  The date string
 is compared to the one generated from the supplied universal time
 TIME."
-  (let ((if-modified-since (header-in :if-modified-since request))
+  (let ((if-modified-since (request-header :if-modified-since request))
         (time-string (rfc-1123-date time)))
     ;; simple string comparison is sufficient; see RFC 2616 14.25
     (when (and if-modified-since
@@ -289,18 +290,18 @@ to what ENOUGH-NAMESTRING does for pathnames."
   (let ((bytes-available (file-length file)))
     (or
      (cl-ppcre:register-groups-bind (start end)
-        ("^bytes (\\d+)-(\\d+)$" (header-in :range request) :sharedp t)
+        ("^bytes (\\d+)-(\\d+)$" (request-header :range request) :sharedp t)
       ;; body won't be executed if regular expression does not match
       (setf start (parse-integer start))
       (setf end (parse-integer end))
       (when (or (< start 0) (>= end bytes-available))
-        (setf (header-out :content-range request) (format nil "bytes 0-~D/*" (1- bytes-available)))
+        (setf (response-header :content-range request) (format nil "bytes 0-~D/*" (1- bytes-available)))
         (abort-request-handler request +http-requested-range-not-satisfiable+
                                (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
                                        start end (1- bytes-available))))
       (file-position file start)
       (setf (status-code request) +http-partial-content+)
-      (setf (header-out :content-range request) (format nil "bytes ~D-~D/*" start end))
+      (setf (response-header :content-range request) (format nil "bytes ~D-~D/*" start end))
       (1+ (- end start)))
      bytes-available)))
 

@@ -89,7 +89,7 @@ facility."
     (format stream "~:[-~@[ (~A)~]~;~:*~A~@[ (~A)~]~] ~:[-~;~:*~A~] [~A] \"~A ~A~@[?~A~] ~
                     ~A\" ~D ~:[-~;~:*~D~] \"~:[-~;~:*~A~]\" \"~:[-~;~:*~A~]\"~%"
             (remote-addr request)
-            (header-in :x-forwarded-for request)
+            (request-header :x-forwarded-for request)
             (authorization request)
             (iso-time)
             (request-method request)
