@@ -57,6 +57,9 @@
   (:documentation "Used by acceptor to generate an error page for a
   request based on the http status code."))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Classes
+
 (defclass acceptor ()
   (
    ;; Configuration
@@ -103,7 +106,7 @@
    (remote-addr :initarg :remote-addr :reader remote-addr) ; cgi REMOTE_ADDR
    (remote-port :initarg :remote-port :reader remote-port) ; cgi - weirdly missing
    (script-name :initform nil :reader script-name) ; cgi SCRIPT_NAME
-   (method :initarg :method :reader request-method) ; cgi REQUEST_METHOD
+   (request-method :initarg :request-method :reader request-method) ; cgi REQUEST_METHOD
    (query-string :initform nil :reader query-string) ; cgi QUERY_STRING
    (server-protocol :initarg :server-protocol :reader server-protocol) ; cgi SERVER_PROTOCOL
    (uri :initarg :uri :reader request-uri)
@@ -269,10 +272,10 @@ different thread than accept-connection is running in."
              (loop 
                 (when (shutdown-p acceptor) (return))
                 
-                (multiple-value-bind (headers-in method url-string protocol)
+                (multiple-value-bind (headers-in request-method url-string protocol)
                     (read-request content-stream)
                   ;; check if there was a request at all
-                  (unless method (return))
+                  (unless request-method (return))
                   (let ((request nil)
                         (transfer-encodings (cdr (assoc* :transfer-encoding headers-in))))
 
@@ -293,7 +296,7 @@ different thread than accept-connection is running in."
                                            :remote-port remote-port
                                            :headers-in headers-in
                                            :content-stream content-stream
-                                           :method method
+                                           :request-method request-method
                                            :uri url-string
                                            :server-protocol protocol))
                         (process-request request)
@@ -439,16 +442,16 @@ connection."
 ;;; Request -- reading the HTTP request from the client
 
 (defun read-request (stream)
-  "Reads incoming headers from the client via STREAM.  Returns as
-multiple values the headers as an alist, the method, the URI, and the
-protocol of the request."
+  "Reads incoming headers from the client via STREAM. Returns as
+multiple values the headers as an alist, the request-method, the URI,
+and the protocol of the request."
   (with-character-stream-semantics
    (let ((first-line (read-initial-request-line stream)))
      (when first-line
        (unless (every #'printable-ascii-char-p first-line)
          (send-bad-request-response stream "Non-ASCII character in request line")
          (return-from read-request nil))
-       (destructuring-bind (&optional method url-string protocol)
+       (destructuring-bind (&optional request-method url-string protocol)
            (split "\\s+" first-line :limit 3)
          (unless url-string
            (send-bad-request-response stream)
@@ -473,7 +476,7 @@ protocol of the request."
                  (when *header-stream*
                    (format *header-stream* "~A~%" continue-line)))))
            (values headers
-                   (as-keyword method)
+                   (as-keyword request-method)
                    url-string
                    (as-keyword (trim-whitespace protocol)))))))))
 
