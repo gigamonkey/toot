@@ -154,7 +154,7 @@
            :request-method
            :request-uri
            :require-authorization
-           :return-code
+           :status-code
            :rfc-1123-date
            :script-name
            :send-headers

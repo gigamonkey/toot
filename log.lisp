@@ -96,7 +96,7 @@ facility."
             (script-name request)
             (query-string request)
             (server-protocol request)
-            (return-code request)
+            (status-code request)
             (content-length request)
             (referer request)
             (user-agent request))))

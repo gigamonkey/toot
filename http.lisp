@@ -114,7 +114,7 @@
    (cookies-in :initform nil :reader cookies-in)
 
    ;; Information used in generating the reply
-   (return-code :initform +http-ok+ :accessor return-code)
+   (status-code :initform +http-ok+ :accessor status-code)
    (content-length :reader content-length :initform nil)
    (content-type :reader content-type)
    (response-charset :initform *default-charset* :accessor response-charset)
@@ -162,7 +162,7 @@
       (error (condition)
         (log-message request :error "Error when creating REQUEST object: ~A" condition)
         ;; we assume it's not our fault...
-        (setf (return-code request) +http-bad-request+)))))
+        (setf (status-code request) +http-bad-request+)))))
 
 (defclass ssl-config ()
   ((certificate-file :initarg :certificate-file :reader certificate-file)
@@ -417,7 +417,7 @@ connection."
      "~A~@[~%~A~]"
      error
      (and *log-lisp-backtraces-p* backtrace)))
-  (setf (return-code request) +http-internal-server-error+)
+  (setf (status-code request) +http-internal-server-error+)
   (send-response 
    request 
    (error-body request :error error :backtrace backtrace)
@@ -743,10 +743,10 @@ returned."
     (finish-output stream)))
 
 (defun send-response-headers (request content-length content-type charset)
-  "Send the response headers and return the stream to which the
-response can be written. The stream is a binary stream. The public API
-function, SEND-HEADERS will wrap that stream in a flexi-stream based
-on the content-type and charset, if needed."
+  "Send the response headers and return the stream to which the body
+of the response can be written. The stream is a binary stream. The
+public API function, SEND-HEADERS will wrap that stream in a
+flexi-stream based on the content-type and charset, if needed."
   ;; Set content-length, content-type and external format if they're
   ;; supplied by caller. They could also have been set directly before
   ;; this function was called.
@@ -762,7 +762,7 @@ on the content-type and charset, if needed."
   
   (let ((stream (content-stream request)))
     (let ((header-stream (make-header-stream stream)))
-      (write-status-line header-stream (return-code request))
+      (write-status-line header-stream (status-code request))
       (write-headers header-stream (headers-out request))
       (write-cookies header-stream (cookies-out request))
       (write-line-crlf header-stream ""))
@@ -809,7 +809,7 @@ on the content-type and charset, if needed."
 
 (defun length-known-p (request)
   (let ((head-request-p (eql (request-method request) :head))
-        (not-modified-response-p (eql (return-code request) +http-not-modified+)))
+        (not-modified-response-p (eql (status-code request) +http-not-modified+)))
     (or head-request-p not-modified-response-p (content-length request))))
 
 (defun make-header-stream (stream)

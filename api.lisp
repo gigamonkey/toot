@@ -86,7 +86,7 @@ can be written. If the content-type is text/* type, the stream
 returned will be a character stream that will encode the response
 properly for the charset specified."
 
-  (setf (return-code request) status-code)
+  (setf (status-code request) status-code)
   (let ((stream (send-response-headers request nil content-type charset)))
     (if (text-type-p content-type)
         stream
@@ -96,7 +96,7 @@ properly for the charset specified."
   "Abort the handling of a request, sending instead a response with
 the given response-status-code. A request can only be aborted if
 SEND-HEADERS has not been called."
-  (setf (return-code request) response-status-code)
+  (setf (status-code request) response-status-code)
   (throw 'handler-done body))
 
 (defun authorization (request)
@@ -186,7 +186,7 @@ if-modified-since request appropriately."
 
     (with-open-file (file pathname :direction :input :element-type 'octet :if-does-not-exist nil)
       (let ((bytes-to-send (maybe-handle-range-header request file)))
-        (setf (return-code request) +http-ok+)
+        (setf (status-code request) +http-ok+)
         (let ((out (send-response-headers request
                                           bytes-to-send 
                                           (or content-type (guess-mime-type (pathname-type pathname)))
@@ -306,7 +306,7 @@ to what ENOUGH-NAMESTRING does for pathnames."
                                (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
                                        start end (1- bytes-available))))
       (file-position file start)
-      (setf (return-code request) +http-partial-content+)
+      (setf (status-code request) +http-partial-content+)
       (setf (header-out :content-range request) (format nil "bytes ~D-~D/*" start end))
       (1+ (- end start)))
      bytes-available)))

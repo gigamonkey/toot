@@ -137,7 +137,7 @@ file name of the request is exactly the given PATH."
 
 (defun default-error-message-generator (request error backtrace)
   "A function that generates a bare-bones error page to be used as an error page generator."
-  (let ((status-code (return-code request)))
+  (let ((status-code (status-code request)))
     (with-output-to-string (s)
       (format s "<html><head><title>~d: ~a</title></head><body><h1>~2:*~d: ~a</h1></body></html>"
               status-code (reason-phrase status-code))

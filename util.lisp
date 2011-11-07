@@ -57,12 +57,11 @@ digits."
   (let ((*package* (find-package :keyword)))
     (read-from-string string)))
 
-(defun reason-phrase (return-code)
-  "Returns a reason phrase for the HTTP return code RETURN-CODE
+(defun reason-phrase (status-code)
+  "Returns a reason phrase for the HTTP return code STATUS-CODE
 \(which should be an integer) or NIL for return codes Toot
 doesn't know."
-  (gethash return-code *http-reason-phrase-map* 
-           "No reason phrase known"))
+  (gethash status-code *http-reason-phrase-map* "No reason phrase known"))
 
 (defgeneric assoc* (thing alist)
   (:documentation "Similar to CL:ASSOC, but 'does the right thing' if
