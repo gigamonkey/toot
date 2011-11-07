@@ -1,4 +1,4 @@
-Toot is a stripped down and hopefully simplified version of Edi
+Toot is a stripped down and, hopefully, simplified version of Edi
 Weitz's Hunchentoot. It does not aim to be backwards compatible with
 anything and large swaths of Hunchentoot functionality have been cut
 out. Some of them may be put back someday. Use at your own risk. If it
