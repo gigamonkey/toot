@@ -29,19 +29,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public API
 
-(defun (setf content-type) (new-value request)
-  "Sets the outgoing 'Content-Type' http header of REQUEST."
-  (setf (header-out :content-type request) new-value))
-
-(defun (setf content-length) (new-value request)
-  "Sets the outgoing 'Content-Length' http header of REQUEST."
-  (setf (header-out :content-length request) new-value))
-
-(defun header-out-set-p (name request)
-  "Returns a true value if the outgoing http header named NAME has
-been specified already.  NAME should be a keyword or a string."
-  (assoc* name (headers-out request)))
-
 (defun cookie-out (name request)
   "Returns the current value of the outgoing cookie named
 NAME. Search is case-sensitive."
@@ -53,9 +40,9 @@ NAME should be a keyword or a string."
   (cdr (assoc name (headers-out request))))
 
 (defun (setf header-out) (new-value name request)
-  "Changes the current value of the outgoing http
-header named NAME \(a keyword or a string).  If a header with this
-name doesn't exist, it is created."
+  "Changes the current value of the outgoing http header named NAME
+\(a keyword or a string). If a header with this name doesn't exist, it
+is created."
   (when (headers-sent-p request)
     (error "Can't set reply headers after headers have been sent."))
 
@@ -69,13 +56,19 @@ name doesn't exist, it is created."
               (acons name new-value (headers-out request))))
     new-value)
 
+  ;; Special case these two. This is kind of hinky, but we need to set
+  ;; the slots if these are set since the slot values will be used in
+  ;; finalize-response-headers to set the actual header. Note that
+  ;; this relation is not directly symmetical. Setting the slot in the
+  ;; object does not immediately set the value in the headers alist.
+  ;; But it will eventually affect it in finalize-response-headers.
   (case name
     (:content-length
      (check-type new-value integer)
-     (setf (slot-value request 'content-length) new-value))
+     (setf (content-length request) new-value))
     (:content-type
      (check-type new-value (or null string))
-     (setf (slot-value request 'content-type) new-value))))
+     (setf (content-type request) new-value))))
 
 (defun send-headers (request &key
                      (content-type *default-content-type*)

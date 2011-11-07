@@ -48,7 +48,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Generic functions to be implemented by users to customize the
-;;; server.
+;;; server. See handlers.lisp for some built in handlers and error
+;;; page generators.
 
 (defgeneric handle-request (handler request)
   (:documentation "Used by the acceptor to handle a request."))
@@ -118,8 +119,8 @@
 
    ;; Information used in generating the reply
    (status-code :initform +http-ok+ :accessor status-code)
-   (content-length :reader content-length :initform nil)
-   (content-type :reader content-type)
+   (content-length :initform nil :accessor content-length)
+   (content-type :initform *default-content-type* :accessor content-type)
    (response-charset :initform *default-charset* :accessor response-charset)
    (headers-out :initform nil :reader headers-out)
    (cookies-out :initform nil :accessor cookies-out)
@@ -133,10 +134,7 @@
    (content-stream :initarg :content-stream :accessor content-stream)
    (tmp-files :initform () :accessor tmp-files)))
 
-(defmethod initialize-instance :after ((request request) &rest init-args)
-  (declare (ignore init-args))
-
-  (setf (header-out :content-type request) *default-content-type*)
+(defmethod initialize-instance :after ((request request) &key &allow-other-keys)
 
   (with-slots (headers-in cookies-in get-parameters script-name query-string) request
     (handler-case*
@@ -152,16 +150,25 @@
           ;; some clients (e.g. ASDF-INSTALL) send requests like
           ;; "GET http://server/foo.html HTTP/1.0"...
           (setf script-name (regex-replace "^https?://[^/]+" script-name ""))
+
           ;; compute GET parameters from query string and cookies from
           ;; the incoming 'Cookie' header
           (setf get-parameters
                 (let ((*substitution-char* #\?))
                   (form-url-encoded-list-to-alist (split "&" query-string))))
 
-          ;; FIXME: Are cookies really always encoded in UTF-8?
+          ;; The utf-8 decoding here is because we always encode the
+          ;; values in outgoing cookies that way, i.e. by url-encoding
+          ;; the values using the utf-8 encoding of characters that
+          ;; need escaping. The comma is because that's how multiple
+          ;; Cookie headers will be joined and the semicolon is
+          ;; because that's how a single Cookie headers delimits the
+          ;; separate cookies.
           (setf cookies-in
-                (form-url-encoded-list-to-alist (split "\\s*[,;]\\s*" (cdr (assoc :cookie headers-in)))
-                                                +utf-8+)))
+                (form-url-encoded-list-to-alist
+                 (split "\\s*[,;]\\s*" (cdr (assoc :cookie headers-in)))
+                 +utf-8+)))
+
       (error (condition)
         (log-message request :error "Error when creating REQUEST object: ~A" condition)
         ;; we assume it's not our fault...
@@ -420,7 +427,8 @@ different thread than accept-connection is running in."
 (defun read-request (stream)
   "Reads incoming headers from the client via STREAM. Returns as
 multiple values the headers as an alist, the request-method, the URI,
-and the protocol of the request."
+and the protocol of the request. The reading of the headers is handled
+by Chunga's read-http-headers method."
   (with-character-stream-semantics
    (let ((first-line (read-initial-request-line stream)))
      (when first-line
@@ -796,17 +804,17 @@ flexi-stream based on the content-type and charset, if needed."
                ;; persistent connections are implicitly assumed for
                ;; HTTP/1.1, but we return a 'Keep-Alive' header if the
                ;; client has explicitly asked for one
-               (setf (header-out :connection request) "Keep-Alive")
+               (set-header :connection "Keep-Alive")
                ;; FIXME: perhaps we should set the Connection header
                ;; regardless of the read-timeout and only set this
                ;; header if there's a timeout.
-               (setf (header-out :keep-alive request) (format nil "timeout=~D" read-timeout)))))
+               (set-header :keep-alive (format nil "timeout=~D" read-timeout)))))
           (t 
            ;; If we aren't doing keep-alive then we need to tell the
            ;; client we're going to close the connection after sending
            ;; the reply.
            (setf (close-stream-p request) t)
-           (setf (header-out :connection request) "Close")))))))
+           (set-header :connection "Close")))))))
 
 (defun length-known-p (request)
   (let ((head-request-p (eql (request-method request) :head))
