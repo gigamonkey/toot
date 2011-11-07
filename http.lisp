@@ -378,30 +378,6 @@ different thread than accept-connection is running in."
      :key private-key-file
      :password private-key-password)))
 
-;;; FIXME: possibly the call site of handler-incoming-connection
-;;; should be set up to allow the taskmaster to simply signal a
-;;; condition or throw something
-(defun send-service-unavailable-reply (acceptor socket)
-  "Send a response to the client before we've created a request
-object. This can be used by taskmasters when they cannot accept a
-connection."
-  (write-simple-reply 
-   (make-header-stream (make-socket-stream socket acceptor))
-   +http-service-unavailable+
-    ;; FIXME: hmmm. this was :content rather than :content-length but
-    ;; I'm thinking that was a translation error. check. And maybe
-    ;; more to the point, it should be :connection . "close" like in
-    ;; send-bad-request-response.
-   '((:content-length . 0))
-   nil))
-
-(defun write-simple-reply (stream status-code headers content)
-  (with-open-stream (s stream)
-    (write-status-line stream status-code)
-    (write-headers stream headers)
-    (write-line-crlf stream "")
-    (when content (write-line-crlf stream content))))
-
 (defun unchunked-stream (stream)
   (cond 
     ((typep stream 'chunked-stream)
@@ -659,10 +635,11 @@ content even if the request method is not POST."
                               (and force-text *default-external-format*))))
   (let ((raw-post-data (or (slot-value request 'raw-post-data)
                            (read-request-body request :want-stream want-stream))))
-    (cond ((typep raw-post-data 'stream) raw-post-data)
-          ((member raw-post-data '(t nil)) nil)
-          (external-format (octets-to-string raw-post-data :external-format external-format))
-          (t raw-post-data))))
+    (cond
+      ((typep raw-post-data 'stream) raw-post-data)
+      ((member raw-post-data '(t nil)) nil)
+      (external-format (octets-to-string raw-post-data :external-format external-format))
+      (t raw-post-data))))
 
 (defun read-request-body (request &key want-stream (already-read 0))
   "Reads the request body from the stream and stores the raw contents
@@ -701,20 +678,6 @@ already been read."
                 while (= pos +buffer-length+)
                 finally (return content)))))))
 
-;; FIXME: why is this HTTP/1.0?
-(defun send-bad-request-response (stream &optional additional-info)
-  (write-sequence 
-   (flex:string-to-octets
-    (format nil "HTTP/1.0 ~D ~A~C~C~
-                 Connection: close~C~C~
-                 ~C~C~
-                 Your request could not be interpreted by this HTTP server~C~C~@[~A~]~C~C"
-            +http-bad-request+ (reason-phrase +http-bad-request+) #\Return #\Linefeed
-            #\Return #\Linefeed
-            #\Return #\Linefeed
-            #\Return #\Linefeed
-            additional-info #\Return #\Linefeed))
-   stream))
 
 (defun external-format-from-content-type (content-type)
   "Creates and returns an external format corresponding to the value
@@ -730,6 +693,41 @@ returned."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Response -- sending back the HTTP response.
+
+;; FIXME: probably should send HTTP/1.0 if the request was.
+(defun send-bad-request-response (stream &optional additional-info)
+  (write-simple-response 
+   (make-header-stream stream)
+   +http-bad-request+
+   '((:connection . "close"))
+   (format nil "Your request could not be interpreted by this HTTP server~C~C~@[~A~C~C~]"
+           #\Return #\Linefeed
+           additional-info
+           #\Return #\Linefeed)))
+
+;;; FIXME: possibly the call site of handler-incoming-connection
+;;; should be set up to allow the taskmaster to simply signal a
+;;; condition or throw something
+(defun send-service-unavailable-response (acceptor socket)
+  "Send a response to the client before we've created a request
+object. This can be used by taskmasters when they cannot accept a
+connection."
+  (write-simple-response
+   (make-header-stream (make-socket-stream socket acceptor))
+   +http-service-unavailable+
+   ;; FIXME: hmmm. this was :content rather than :content-length but
+   ;; I'm thinking that was a translation error. check. And maybe
+   ;; more to the point, it should be :connection . "close" like in
+   ;; send-bad-request-response.
+   '((:content-length . 0))
+   nil))
+
+(defun write-simple-response (stream status-code headers content)
+  (with-open-stream (s stream)
+    (write-status-line stream status-code)
+    (write-headers stream headers)
+    (write-line-crlf stream "")
+    (when content (write-line-crlf stream content))))
 
 ;; FIXME: technically a HEAD request SHOULD still have a
 ;; Content-Length header specifying "the size of the entity-body that
