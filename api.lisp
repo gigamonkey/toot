@@ -77,14 +77,20 @@ name doesn't exist, it is created."
      (check-type new-value (or null string))
      (setf (slot-value request 'content-type) new-value))))
 
-;; FIXME: if binary is nil, should we set external-format on the
-;; request so the content-type will get adjusted.
-(defun send-headers (request &key binary (external-format :utf-8))
-  "Send the headers and return a stream to which the body of the reply can be written."
-  (let ((stream (start-output request)))
-    (cond
-      (binary stream)
-      (t (flexi-streams:make-flexi-stream stream :external-format external-format)))))
+(defun send-headers (request &key
+                     (content-type *default-content-type*)
+                     (charset *default-charset*)
+                     (status-code +http-ok+))
+  "Send the headers and return a stream to which the body of the reply
+can be written. If the content-type is text/* type, the stream
+returned will be a character stream that will encode the response
+properly for the charset specified."
+
+  (setf (return-code request) status-code)
+  (let ((stream (send-response-headers request nil content-type charset)))
+    (if (text-type-p content-type)
+        stream
+        (make-flexi-stream stream :external-format (make-external-format charset)))))
 
 (defun abort-request-handler (request response-status-code &optional body)
   "Abort the handling of a request, sending instead a response with
@@ -156,11 +162,9 @@ Otherwise returns the value of REMOTE-ADDR as the only value."
                              (values (first addresses) addresses)))
           (t (remote-addr request)))))
 
-
-
-
-
-(defun serve-file (request pathname &optional content-type)
+;; FIXME: the caller needs to know the charset of the file. Not sure
+;; if there's anything better to do.
+(defun serve-file (request pathname &optional content-type (charset *default-charset*))
   "Serve the file denoted by PATHNAME. Sends a content type header
 corresponding to CONTENT-TYPE or \(if that is NIL) tries to determine
 the content type via the file's suffix. Aborts the request with 404:
@@ -170,12 +174,11 @@ if-modified-since request appropriately."
             (not (fad:file-exists-p pathname))
             (fad:directory-exists-p pathname))
     (abort-request-handler request +http-not-found+))
-  
+
   (let ((time (or (file-write-date pathname) (get-universal-time))))
 
     ;; FIXME: do we really need to set the headers even if we might
     ;; send a not modified response? If not, let's check that first.
-    (setf (content-type request) (or content-type (guess-mime-type (pathname-type pathname))))
     (setf (header-out :last-modified request) (rfc-1123-date time))
     (setf (header-out :accept-ranges request) "bytes")
 
@@ -183,10 +186,15 @@ if-modified-since request appropriately."
 
     (with-open-file (file pathname :direction :input :element-type 'octet :if-does-not-exist nil)
       (let ((bytes-to-send (maybe-handle-range-header request file)))
-        (setf (content-length request) bytes-to-send)
-
-        (let ((out (send-headers request :binary t))
+        (setf (return-code request) +http-ok+)
+        (let ((out (send-response-headers request
+                                          bytes-to-send 
+                                          (or content-type (guess-mime-type (pathname-type pathname)))
+                                          charset))
               (buf (make-array +buffer-length+ :element-type 'octet)))
+          ;; FIXME: is this necessary? We shouldn't have a
+          ;; flexi-stream at this point. In fact, this should probably
+          ;; blow up because of that.
           #+:clisp
           (setf (flexi-stream-element-type (content-stream (acceptor request))) 'octet)
           (loop
@@ -285,26 +293,23 @@ to what ENOUGH-NAMESTRING does for pathnames."
   already opened file to the location specified. Returns the number of
   bytes to transfer from the file. Invalid specified ranges are
   reported to the client with a HTTP 416 status code."
-  (let ((bytes-to-send (file-length file)))
-    (cl-ppcre:register-groups-bind
-        (start end)
+  (let ((bytes-available (file-length file)))
+    (or
+     (cl-ppcre:register-groups-bind (start end)
         ("^bytes (\\d+)-(\\d+)$" (header-in :range request) :sharedp t)
       ;; body won't be executed if regular expression does not match
-      (setf start (parse-integer start)
-            end (parse-integer end))
-      (when (or (< start 0)
-                (>= end (file-length file)))
-        (setf (header-out :content-range request) (format nil "bytes 0-~D/*" (1- (file-length file))))
-        (abort-request-handler
-         request
-         +http-requested-range-not-satisfiable+
-         (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
-                 start end (1- (file-length file)))))
+      (setf start (parse-integer start))
+      (setf end (parse-integer end))
+      (when (or (< start 0) (>= end bytes-available))
+        (setf (header-out :content-range request) (format nil "bytes 0-~D/*" (1- bytes-available)))
+        (abort-request-handler request +http-requested-range-not-satisfiable+
+                               (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
+                                       start end (1- bytes-available))))
       (file-position file start)
-      (setf (return-code request) +http-partial-content+
-            bytes-to-send (1+ (- end start))
-            (header-out :content-range request) (format nil "bytes ~D-~D/*" start end)))
-    bytes-to-send))
+      (setf (return-code request) +http-partial-content+)
+      (setf (header-out :content-range request) (format nil "bytes ~D-~D/*" start end))
+      (1+ (- end start)))
+     bytes-available)))
 
 (defun starts-with-scheme-p (string)
   "Checks whether the string STRING represents a URL which starts with

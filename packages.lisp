@@ -96,8 +96,6 @@
            :port
            :address
            :taskmaster
-           :output-chunking-p
-           :input-chunking-p
            :persistent-connections-p
            :read-timeout
            :write-timeout
@@ -152,7 +150,6 @@
            :referer
            :remote-addr
            :remote-port
-           :external-format
            :request
            :request-method
            :request-uri

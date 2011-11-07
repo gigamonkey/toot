@@ -121,6 +121,9 @@ If this is text content type, the character set used for encoding the
 response will automatically be added to the content type in a
 ``charset'' attribute.")
 
+(defvar *default-charset* :utf-8
+  "The default charset for text/* content-types.")
+
 (defvar *methods-for-post-parameters* '(:post)
   "A list of the request method types \(as keywords) for which
 Toot will try to compute POST-PARAMETERS.")

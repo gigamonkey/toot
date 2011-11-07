@@ -74,8 +74,8 @@ tricky bits such as '..'"
              (every #'stringp (rest directory))))))
 
 (defun resolve-file (script-name document-root)
-  (merge-pathnames (add-index (subseq script-name 1)) document-root))
-
+  (merge-pathnames (subseq (add-index script-name) 1) document-root))
+  
 (defun add-index (filename &key (extension "html"))
   (format nil "~a~@[index~*~@[.~a~]~]" filename (ends-with #\/ filename) extension))
 

@@ -117,7 +117,7 @@
    (return-code :initform +http-ok+ :accessor return-code)
    (content-length :reader content-length :initform nil)
    (content-type :reader content-type)
-   (external-format :initform *default-external-format* :accessor external-format)
+   (response-charset :initform *default-charset* :accessor response-charset)
    (headers-out :initform nil :reader headers-out)
    (cookies-out :initform nil :accessor cookies-out)
 
@@ -296,7 +296,8 @@ different thread than accept-connection is running in."
                                            :method method
                                            :uri url-string
                                            :server-protocol protocol))
-                        (process-request request)))
+                        (process-request request)
+                        (log-access (access-logger acceptor) request)))
                     (force-output content-stream)
                     (setf content-stream (unchunked-stream content-stream))
                     (when (close-stream-p request) (return)))))
@@ -351,7 +352,7 @@ different thread than accept-connection is running in."
            (unless (headers-sent-p request)
              (handler-case
                  (with-debugger 
-                   (start-output request (or body (error-body request))))
+                   (send-response request (or body (error-body request))))
                (error (e)
                  ;; error occured while writing to the client. attempt to report.
                  (report-error-to-client request e)))))
@@ -417,7 +418,11 @@ connection."
      error
      (and *log-lisp-backtraces-p* backtrace)))
   (setf (return-code request) +http-internal-server-error+)
-  (start-output request (error-body request :error error :backtrace backtrace)))
+  (send-response 
+   request 
+   (error-body request :error error :backtrace backtrace)
+   :content-type "text/html"
+   :charset :utf-8))
 
 (defun error-body (request &key error backtrace)
   (let ((generator (error-generator (acceptor request))))
@@ -721,157 +726,106 @@ returned."
           (toot-warn "Invalid character set ~S in request has been ignored." charset))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Reply -- sending back the HTTP reply.
+;;; Response -- sending back the HTTP response.
 
 ;; FIXME: technically a HEAD request SHOULD still have a
 ;; Content-Length header specifying "the size of the entity-body that
 ;; would have been sent had the request been a GET". Though that's
 ;; hard to do in the case where the handler writes to a stream. But
-;; it's not MUST so maybe ignore.
-(defun start-output (request &optional (content nil content-provided-p))
-  "Start sending the reply."
-  (let* ((return-code (return-code request))
-         (acceptor (acceptor request))
-         (chunkedp (and (eql (server-protocol request) :http/1.1)
-                        ;; only turn chunking on if the content
-                        ;; length is unknown at this point...
-                        (null (or (content-length request) content-provided-p))))
-         (head-request-p (eql (request-method request) :head)))
+;; it's not MUST so maybe don't worry about it.
 
-    (multiple-value-bind (keep-alive-p keep-alive-requested-p)
-        (keep-alive-p request)
-      (when keep-alive-p
-        (setf keep-alive-p
-              ;; use keep-alive if there's a way for the client to
-              ;; determine when all content is sent (or if there
-              ;; is no content)
-              (or chunkedp
-                  head-request-p
-                  (eql return-code +http-not-modified+)
-                  (content-length request)
-                  content)))
-      ;; now set headers for keep-alive and chunking
-      (when chunkedp
-        (setf (header-out :transfer-encoding request) "chunked"))
+(defun send-response (request content &key content-type (charset *default-charset*))
+  "Send a full response with the given content as the body."
+  (let ((stream (content-stream request))
+        (encoded (string-to-octets content :external-format charset)))
+    (send-response-headers request (length encoded) content-type charset)
+    (unless (eql (request-method request) :head) (write-sequence encoded stream))
+    (finish-output stream)))
 
-      ;; FIXME: it's possible we don't set a :connection header at
-      ;; all. Is that okay?
-      (cond 
-        (keep-alive-p
-         (setf (close-stream-p request) nil)
-         (when (and (read-timeout acceptor)
-                    (or (not (eql (server-protocol request) :http/1.1))
-                        keep-alive-requested-p))
-           ;; persistent connections are implicitly assumed for
-           ;; HTTP/1.1, but we return a 'Keep-Alive' header if the
-           ;; client has explicitly asked for one
-           (setf (header-out :connection request) "Keep-Alive")
-           (setf (header-out :keep-alive request) (format nil "timeout=~D" (read-timeout acceptor)))))
+(defun send-response-headers (request content-length content-type charset)
+  "Send the response headers and return the stream to which the
+response can be written. The stream is a binary stream. The public API
+function, SEND-HEADERS will wrap that stream in a flexi-stream based
+on the content-type and charset, if needed."
+  ;; Set content-length, content-type and external format if they're
+  ;; supplied by caller. They could also have been set directly before
+  ;; this function was called.
+  (when content-length (setf (content-length request) content-length))
+  (when content-type (setf (content-type request) content-type))
+  (when charset (setf (response-charset request) charset))
 
-        (t (setf (header-out :connection request) "Close"))))
-
-    (unless (and (header-out-set-p :server request) 
-                 (null (header-out :server request)))
-      (setf (header-out :server request) (or (header-out :server request)
-                                             (format nil "Toot ~A" *toot-version*))))
-
-    (setf (header-out :date request) (rfc-1123-date))
-
-    (when (stringp content)
-      ;; if the content is a string, convert it to the proper external format
-      (setf content (string-to-octets content :external-format (external-format request)))
-      (setf (content-type request) (maybe-add-charset-to-content-type-header 
-                                    (content-type request)
-                                    (external-format request))))
-
-    ;; FIXME: this should probably be within the preceeding WHEN.
-    (when content
-      ;; whenever we know what we're going to send out as content, set
-      ;; the Content-Length header properly; maybe the user specified
-      ;; a different content length, but that will be wrong anyway
-      (setf (header-out :content-length request) (length content)))
-
-
-    ;; If the handler calls send-headers, then we will get here with
-    ;; no content and need to send the headers. Then, after the
-    ;; handler returns, the acceptor will call start-output again and
-    ;; we'll end up here with still no content but with the headers
-    ;; sent, in which case we do nothing (and the return value is
-    ;; ignored).
-    ;;
-    ;; If, however, the handler didn't call send-headers, then
-    ;; start-output will be called for the first time from
-    ;; process-request after the handler returns with (presumably) a
-    ;; non-nil content, in which case we need to send the headers and
-    ;; then send the content.
-    ;;
-    ;; Finally, there's the wrinkle that either of those scenarios
-    ;; could also occur in response to a HEAD request in which case we
-    ;; want to skip sending the content anyway.
-    (unless (headers-sent-p request)
-      (let ((stream (content-stream request)))
-
-        (when content
-          (unless head-request-p
-            (setf (content-length request) (length content))))
-        
-        (%send-headers stream request return-code)
-
-        (when content
-          (unless head-request-p
-            (write-sequence content stream)
-            (finish-output stream)))
-      
-        ;; when processing a HEAD request, exit to return from
-        ;; PROCESS-REQUEST. In the case of a handler that calls
-        ;; send-header this will cause the handler to exit suddenly,
-        ;; before it outputs any content.
-        (when head-request-p (throw 'request-processed nil))
-        
-        ;;; This case is mostly (only?) interesting in the
-        ;;; send-headers case (and perhaps should be moved there)
-        ;;; since if we were called with content, it has, by the
-        ;;; point, already been written and the request has been
-        ;;; processed and after process-request returns the request
-        ;;; whose content-stream we are setting here will become
-        ;;; garbage.
-        (when chunkedp
-          ;; turn chunking on after the headers have been sent
-          (unless (typep (content-stream request) 'chunked-stream)
-            (setf (content-stream request) (make-chunked-stream (content-stream request))))
-          (setf (chunked-stream-output-chunking-p (content-stream request)) t))
-      
-        (content-stream request)))))
-
-(defun %send-headers (stream request status-code)
-  (log-access (access-logger (acceptor request)) request)
+  (finalize-response-headers request)
 
   ;; Read post data to clear stream - Force binary mode to avoid
   ;; OCTETS-TO-STRING overhead.
   (raw-post-data request :force-binary t)
+  
+  (let ((stream (content-stream request)))
+    (let ((header-stream (make-header-stream stream)))
+      (write-status-line header-stream (return-code request))
+      (write-headers header-stream (headers-out request))
+      (write-cookies header-stream (cookies-out request))
+      (write-line-crlf header-stream ""))
+    (setf (headers-sent-p request) t)
+    stream))
 
-  (let ((header-stream (make-header-stream stream)))
-    (write-status-line header-stream status-code)
-    (write-headers header-stream (headers-out request))
-    (write-cookies header-stream (cookies-out request))
-    (write-line-crlf stream ""))
+(defun finalize-response-headers (request)
+  "Set certain headers automatically based on values in the request object."
+  (flet ((set-header (name value) (setf (header-out name request) value)))
 
-  (setf (headers-sent-p request) t))
+    (set-header :date (rfc-1123-date))
+    (set-header :content-type (full-content-type request))
+    ;; FIXME: Do we possibly want to allow the user to set this per
+    ;; request? Also could put it on the acceptor.
+    (set-header :server (format nil "Toot ~a" *toot-version*))
+    
+    ;; Chunked encoding only available in http/1.1 and only needed if
+    ;; we don't know the length of the content we're sending.
+    (let* ((http/1.1-p (eql (server-protocol request) :http/1.1))
+           (chunkedp (and http/1.1-p (not (content-length request)))))
+
+      (when chunkedp (set-header :transfer-encoding "chunked"))
+    
+      (multiple-value-bind (keep-alive-p keep-alive-requested-p) (keep-alive-p request)
+        (cond 
+          ((and keep-alive-p (or chunkedp (length-known-p request)))
+           (setf (close-stream-p request) nil)
+           (let ((read-timeout (read-timeout (acceptor request))))
+             (when (and read-timeout (or (not http/1.1-p) keep-alive-requested-p))
+               ;; persistent connections are implicitly assumed for
+               ;; HTTP/1.1, but we return a 'Keep-Alive' header if the
+               ;; client has explicitly asked for one
+               (setf (header-out :connection request) "Keep-Alive")
+               ;; FIXME: perhaps we should set the Connection header
+               ;; regardless of the read-timeout and only set this
+               ;; header if there's a timeout.
+               (setf (header-out :keep-alive request) (format nil "timeout=~D" read-timeout)))))
+          (t 
+           ;; If we aren't doing keep-alive then we need to tell the
+           ;; client we're going to close the connection after sending
+           ;; the reply.
+           (setf (close-stream-p request) t)
+           (setf (header-out :connection request) "Close")))))))
+
+(defun length-known-p (request)
+  (let ((head-request-p (eql (request-method request) :head))
+        (not-modified-response-p (eql (return-code request) +http-not-modified+)))
+    (or head-request-p not-modified-response-p (content-length request))))
 
 (defun make-header-stream (stream)
   "Make a stream just for writing the HTTP headers."
-  (let* ((client-header-stream (flex:make-flexi-stream stream :external-format :iso-8859-1)))
-    (if *header-stream*
-        (make-broadcast-stream *header-stream* client-header-stream)
-        client-header-stream)))
+  (let ((header-stream (make-flexi-stream stream :external-format :iso-8859-1)))
+    (if *header-stream* (make-broadcast-stream *header-stream* header-stream) header-stream)))
 
-;; FIXME: if there is a charset= in the content-type, should me check
-;; that it matches the given external-format
-(defun maybe-add-charset-to-content-type-header (content-type external-format)
-  (if (and (cl-ppcre:scan "(?i)^text" content-type)
-           (not (cl-ppcre:scan "(?i);\\s*charset=" content-type)))
-      (format nil "~A; charset=~(~A~)" content-type (flex:external-format-name external-format))
-      content-type))
+(defun text-type-p (content-type)
+  (cl-ppcre:scan "(?i)^text" content-type))
+
+(defun full-content-type (request)
+  "Return the value for the Content-Type header, including a charset if it's a text/* type."
+  (with-slots (content-type response-charset) request
+    (if (text-type-p content-type)
+        (format nil "~a; charset=~(~a~)" content-type response-charset)
+        content-type)))
 
 (defun write-line-crlf (stream fmt &rest args)
   (apply #'format stream fmt args)
