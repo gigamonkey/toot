@@ -27,47 +27,10 @@
 
 (in-package :toot)
 
-(defun starts-with-p (seq subseq &key (test 'eql))
-  "Tests whether the sequence SEQ starts with the sequence
-SUBSEQ.  Individual elements are compared with TEST."
-  (let* ((length (length subseq))
-         (mismatch (mismatch subseq seq
-                             :test test)))
-    (or (null mismatch)
-        (<= length mismatch))))
-
-(defun starts-with-one-of-p (seq subseq-list &key (test 'eql))
-  "Tests whether the sequence SEQ starts with one of the
-sequences in SUBSEQ-LIST.  Individual elements are compared with
-TEST."
-  (some (lambda (subseq)
-          (starts-with-p seq subseq :test test))
-        subseq-list))
-
-(defun create-random-string (&optional (n 10) (base 16))
-  "Returns a random number \(as a string) with base BASE and N
-digits."
-  (with-output-to-string (s)
-    (dotimes (i n)
-      (format s "~VR" base
-              (random base *the-random-state*)))))
-
-(defun string-as-keyword (string)
-  "Intern STRING as keyword using the reader so that case conversion is done with the reader defaults."
-  (let ((*package* (find-package :keyword)))
-    (read-from-string string)))
-
 (defun reason-phrase (status-code)
-  "Returns a reason phrase for the HTTP return code STATUS-CODE
-\(which should be an integer) or NIL for return codes Toot
-doesn't know."
+  "Returns a reason phrase for the HTTP return code STATUS-CODE (which
+should be an integer) or NIL for return codes Toot doesn't know."
   (gethash status-code *http-reason-phrase-map* "No reason phrase known"))
-
-(defun md5-hex (string)
-  "Calculates the md5 sum of the string STRING and returns it as a hex string."
-  (with-output-to-string (s)
-    (loop for code across (md5:md5sum-sequence (coerce string 'simple-string))
-	  do (format s "~2,'0x" code))))
 
 (defun escape-for-html (string)
   "Escapes the characters #\\<, #\\>, #\\', #\\\", and #\\& for HTML output."
@@ -109,6 +72,7 @@ according to HTTP/1.1 \(RFC 2068)."
             minute
             second)))
 
+;; FIXME: this is lacking time zone. Should probably log on zulu time.
 (defun iso-time (&optional (time (get-universal-time)))
   "Returns the universal time TIME as a string in full ISO format."
   (multiple-value-bind (second minute hour date month year)
@@ -116,21 +80,16 @@ according to HTTP/1.1 \(RFC 2068)."
     (format nil "~4,'0d-~2,'0d-~2,'0d ~2,'0d:~2,'0d:~2,'0d"
             year month date hour minute second)))
 
-(defun make-tmp-filename-generator (request)
-  (lambda ()
-    (let ((tmp-filename
-           #+:allegro (pathname (system:make-temp-file-name prefix *tmp-directory*))
-           #-:allegro 
-           (loop for pathname = (make-pathname 
-                                 :name (format nil "toot-~A" (incf *tmp-counter*))
-                                 :type nil
-                                 :defaults *tmp-directory*)
-              unless (probe-file pathname) return pathname)))
-      (push tmp-filename (tmp-files request))
-      ;; maybe call hook for file uploads
-      (when *file-upload-hook*
-        (funcall *file-upload-hook* tmp-filename))
-      tmp-filename)))
+(defun tmp-filename ()
+  (loop for pathname = (possible-tmp-filename)
+     when (try-create-tmp-file pathname) return pathname))
+
+(defun possible-tmp-filename ()
+  (let ((n (with-lock-held (*tmp-counter-lock*) (incf *tmp-counter*))))
+    (make-pathname :name n :type nil :defaults *tmp-directory*)))
+
+(defun try-create-tmp-file (pathname)
+  (with-open-file (p pathname :direction :output :if-exists nil :if-does-not-exist :create) p))
 
 (defun quote-string (string)
   "Quotes string according to RFC 2616's definition of `quoted-string'."
@@ -259,44 +218,19 @@ to be the corresponding header value as a string."
                charset)))
        (values type subtype charset)))))
 
-(defun keep-alive-p (request)
-  "Returns a true value unless the incoming request's headers or the
-server's PERSISTENT-CONNECTIONS-P setting obviate a keep-alive reply.
-The second return value denotes whether the client has explicitly
-asked for a persistent connection."
-  (let ((connection-values
-         ;; the header might consist of different values separated by commas
-         (when-let (connection-header (request-header :connection request))
-           (split "\\s*,\\s*" connection-header))))
-    (flet ((connection-value-p (value)
-             (member value connection-values :test #'string-equal)))
-      (let ((keep-alive-requested-p (connection-value-p "keep-alive")))
-        (values (and (persistent-connections-p (acceptor request))
-                     (or (and (eql (server-protocol request) :http/1.1)
-                              (not (connection-value-p "close")))
-                         (and (eql (server-protocol request) :http/1.0)
-                              keep-alive-requested-p)))
-                keep-alive-requested-p)))))
-
 (defun address-string (request)
   "Returns a string with information about Toot suitable for
 inclusion in HTML output."
-  (flet ((escape-for-html (arg)
-           (if arg
-               (escape-for-html arg)
-               arg)))
+  (flet ((escaped (arg) (and arg (escape-for-html arg))))
 
     (let ((host (request-header :host request)))
       (format nil "<address><a href='http://www.gigamonkeys.com/toot/'>Toot ~A</a> <a href='~A'>(~A ~A)</a>~@[ at ~A~:[ (port ~D)~;~]~]</address>"
               *toot-version*
               +implementation-link+
-              (escape-for-html (lisp-implementation-type))
-              (escape-for-html (lisp-implementation-version))
-              (escape-for-html (or host (address (acceptor request))))
+              (escaped (lisp-implementation-type))
+              (escaped (lisp-implementation-version))
+              (escaped (or host (address (acceptor request))))
               (scan ":\\d+$" (or host ""))
               (port (acceptor request))))))
 
-(defun chunking-input-p (request)
-  "Whether input chunking is currently switched on for the acceptor's
-content stream."
-  (chunked-stream-input-chunking-p (content-stream request)))
+

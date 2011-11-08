@@ -509,7 +509,7 @@ alist or NIL if there was no data or the data could not be parsed."
              content-stream
              (request-header :content-type request)
              external-format
-             (make-tmp-filename-generator request))
+             (lambda () (first (push (tmp-filename) (tmp-files request)))))
           (let ((stray-data (read-request-body request :already-read (flexi-stream-position content-stream))))
             (when (and stray-data (plusp (length stray-data)))
               (toot-warn "~A octets of stray data after form-data sent by client."
@@ -696,6 +696,11 @@ already been read."
                 finally (return content)))))))
 
 
+(defun chunking-input-p (request)
+  "Whether input chunking is currently switched on for the acceptor's
+content stream."
+  (chunked-stream-input-chunking-p (content-stream request)))
+
 (defun external-format-from-content-type (content-type)
   "Creates and returns an external format corresponding to the value
 of the content type header provided in CONTENT-TYPE.  If the content
@@ -807,10 +812,12 @@ flexi-stream based on the content-type and charset, if needed."
           ((and keep-alive-p (or chunkedp (length-known-p request)))
            (setf (close-stream-p request) nil)
            (let ((read-timeout (read-timeout (acceptor request))))
-             (when (and read-timeout (or (not http/1.1-p) keep-alive-requested-p))
-               ;; persistent connections are implicitly assumed for
-               ;; HTTP/1.1, but we return a 'Keep-Alive' header if the
-               ;; client has explicitly asked for one
+             (when (and read-timeout keep-alive-requested-p)
+               ;; In HTTP/1.0 keep-alive-p and keep-alive-requested-p
+               ;; will always be the same. In HTTP/1.1 persistent
+               ;; connections are assumed, but we'll return a
+               ;; 'Keep-Alive' header if the client has explicitly
+               ;; asked for one.
                (set-header :connection "Keep-Alive")
                ;; FIXME: perhaps we should set the Connection header
                ;; regardless of the read-timeout and only set this
@@ -827,6 +834,27 @@ flexi-stream based on the content-type and charset, if needed."
   (let ((head-request-p (eql (request-method request) :head))
         (not-modified-response-p (eql (status-code request) +http-not-modified+)))
     (or head-request-p not-modified-response-p (content-length request))))
+
+(defun keep-alive-p (request)
+  "Should the current connection be kept alive? Secondary value
+indicates whether the client explicitly requested keep-alive. (Always
+the same as the primary value for HTTP/1.0 but potentially different
+in HTTP/1.1.)"
+  (let ((connection-values (connection-values request)))
+    (flet ((connection-value-p (value)
+             (member value connection-values :test #'string-equal)))
+
+      (let ((keep-alive-requested-p (connection-value-p "keep-alive")))
+        (values (and (persistent-connections-p (acceptor request))
+                     (case (server-protocol request)
+                       (:http/1.1 (not (connection-value-p "close")))
+                       (:http/1.0 keep-alive-requested-p)))
+                keep-alive-requested-p)))))
+
+(defun connection-values (request)
+  ;; the header might consist of different values separated by commas
+  (when-let (connection-header (request-header :connection request))
+    (split "\\s*,\\s*" connection-header)))
 
 (defun make-header-stream (stream)
   "Make a stream just for writing the HTTP headers."

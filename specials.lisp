@@ -182,6 +182,9 @@ the debugger).")
   #-(or :win32 :mswindows) "/tmp/toot/"
   "Directory for temporary files created by MAKE-TMP-FILE-NAME.")
 
+(defvar *tmp-counter-lock* (make-lock "tmp-counter-lock")
+  "Lock to protect access to *tmp-counter*.")
+
 (defvar *tmp-counter* 0
   "Counter used in creating tmp filenames.")
 
