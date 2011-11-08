@@ -128,11 +128,6 @@ same name exist the GET parameter is returned. Search is
 case-sensitive."
   (or (get-parameter name request) (post-parameter name request)))
 
-(defun cookie-in (name request)
-  "Returns the cookie with the name NAME (a string) as sent by the
-browser - or NIL if there is none."
-  (cdr (assoc name (cookies-in request) :test #'string=)))
-
 (defun real-remote-addr (request)
   "Returns the 'X-Forwarded-For' incoming http header as the
 second value in the form of a list of IP addresses and the first
@@ -248,6 +243,12 @@ to what ENOUGH-NAMESTRING does for pathnames."
     (cond
       ((string= url url-prefix :end1 prefix-length) (subseq url prefix-length))
       (t url))))
+
+(defun cookie-value (name request)
+  "Get the value of the cookie with the given name sent by the client
+or NIL if no such cookie was sent."
+  (when-let (cookie (cdr (assoc name (cookies-in request) :test #'string=)))
+    (slot-value cookie 'value)))
 
 (defun set-cookie (name request &key (value "") expires path domain secure http-only)
   "Set a cookie to be sent with the reply."

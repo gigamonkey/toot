@@ -112,26 +112,17 @@
            :redirect
            :handle-if-modified-since
 
+           ;; Query the request
            :get-parameter
            :post-parameter
+           :post-parameters
            :parameter
-           :cookie-in
-
+           :cookie-value
            :set-cookie
 
            :content-length
            :content-type
 
-           :cookie-domain
-           :cookie-expires
-           :cookie-http-only
-           :cookie-name
-           :cookie-out
-           :cookie-path
-           :cookie-secure
-           :cookie-value
-           :cookies-in
-           :cookies-out
            :escape-for-html
            :serve-file
            :request-header
@@ -143,9 +134,6 @@
            :initialize-connection-stream
            :maybe-invoke-debugger
            :parameter-error
-           :post-parameters
-           :process-connection
-           :process-request
            :query-string
            :raw-post-data
            :real-remote-addr
