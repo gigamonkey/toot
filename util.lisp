@@ -63,16 +63,6 @@ digits."
 doesn't know."
   (gethash status-code *http-reason-phrase-map* "No reason phrase known"))
 
-(defgeneric assoc* (thing alist)
-  (:documentation "Similar to CL:ASSOC, but 'does the right thing' if
-THING is a string or a symbol.")
-  (:method ((thing symbol) alist)
-   (assoc thing alist :test #'eq))
-  (:method ((thing string) alist)
-   (assoc thing alist :test #'string-equal))
-  (:method (thing alist)
-   (assoc thing alist :test #'eql)))
-
 (defun md5-hex (string)
   "Calculates the md5 sum of the string STRING and returns it as a hex string."
   (with-output-to-string (s)

@@ -293,7 +293,7 @@ different thread than accept-connection is running in."
                   ;; check if there was a request at all
                   (unless request-method (return))
                   (let ((request nil)
-                        (transfer-encodings (cdr (assoc* :transfer-encoding request-headers))))
+                        (transfer-encodings (cdr (assoc :transfer-encoding request-headers))))
 
                     (when transfer-encodings
                       (setf transfer-encodings (split "\\s*,\\s*" transfer-encodings))
@@ -454,7 +454,7 @@ by Chunga's read-http-headers method."
          (let ((headers (and protocol (read-http-headers stream *header-stream*))))
            (unless protocol (setf protocol "HTTP/0.9"))
            ;; maybe handle 'Expect: 100-continue' header
-           (when-let (expectations (cdr (assoc* :expect headers)))
+           (when-let (expectations (cdr (assoc :expect headers)))
              (when (member "100-continue" (split "\\s*,\\s*" expectations) :test #'equalp)
                ;; according to 14.20 in the RFC - we should actually
                ;; check if we have to respond with 417 here
@@ -574,7 +574,7 @@ request body. By default, the encoding is determined from the
 Content-Type header of the request or from *DEFAULT-EXTERNAL-FORMAT*
 if none is found."
   (when (and (request-header :content-type request)
-             (member (request-method request) *methods-for-post-parameters* :test #'eq)
+             (member (request-method request) *methods-for-post-parameters* :test #'eql)
              (or force
                  (not (slot-value request 'raw-post-data)))
 	     ;; can't reparse multipart posts, even when FORCEd

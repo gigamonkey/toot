@@ -96,7 +96,7 @@ SEND-HEADERS has not been called."
 (defun request-header (name request)
   "Returns the incoming header with name NAME. NAME can be a
 keyword (recommended) or a string."
-  (cdr (assoc* name (request-headers request))))
+  (cdr (assoc name (request-headers request) :test #'equalp)))
 
 (defun authorization (request)
   "Returns as two values the user and password (if any) as encoded in
