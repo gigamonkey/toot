@@ -295,16 +295,18 @@ inclusion in HTML output."
            (if arg
                (escape-for-html arg)
                arg)))
-    (format nil "<address><a href='http://www.gigamonkeys.com/toot/'>Toot ~A</a> <a href='~A'>(~A ~A)</a>~@[ at ~A~:[ (port ~D)~;~]~]</address>"
-            *toot-version*
-            +implementation-link+
-            (escape-for-html (lisp-implementation-type))
-            (escape-for-html (lisp-implementation-version))
-            (escape-for-html (or (host request) (address (acceptor request))))
-            (scan ":\\d+$" (or (host request) ""))
-            (port (acceptor request)))))
+
+    (let ((host (request-header :host request)))
+      (format nil "<address><a href='http://www.gigamonkeys.com/toot/'>Toot ~A</a> <a href='~A'>(~A ~A)</a>~@[ at ~A~:[ (port ~D)~;~]~]</address>"
+              *toot-version*
+              +implementation-link+
+              (escape-for-html (lisp-implementation-type))
+              (escape-for-html (lisp-implementation-version))
+              (escape-for-html (or host (address (acceptor request))))
+              (scan ":\\d+$" (or host ""))
+              (port (acceptor request))))))
 
 (defun chunking-input-p (request)
-  "Whether input chunking is currently switched on for the acceptors
-content stream. N.B. This is different than whether the "
+  "Whether input chunking is currently switched on for the acceptor's
+content stream."
   (chunked-stream-input-chunking-p (content-stream request)))

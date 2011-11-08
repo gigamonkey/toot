@@ -29,21 +29,21 @@
 ;; Helper macro
 
 (defmacro with-request-count-incremented ((acceptor) &body body)
-  "Execute BODY with REQUESTS-IN-PROGRESS of ACCEPTOR
-  incremented by one. If the SHUTDOWN-P returns true after the BODY
-  has been executed, the SHUTDOWN-QUEUE condition variable of the
-  ACCEPTOR is signalled in order to finish shutdown processing."
-  `(do-with-request-count-incremented ,acceptor (lambda () ,@body)))
-
-(defun do-with-request-count-incremented (acceptor function)
-  (with-lock-held ((shutdown-lock acceptor))
-    (incf (requests-in-progress acceptor)))
-  (unwind-protect
-       (funcall function)
-    (with-lock-held ((shutdown-lock acceptor))
-      (decf (requests-in-progress acceptor))
-      (when (shutdown-p acceptor)
-        (condition-notify (shutdown-queue acceptor))))))
+  "Execute BODY with REQUESTS-IN-PROGRESS of ACCEPTOR incremented by
+one. If the SHUTDOWN-P returns true after the BODY has been executed,
+the SHUTDOWN-QUEUE condition variable of the ACCEPTOR is signalled in
+order to finish shutdown processing."
+  (with-unique-names (lock)
+    (once-only (acceptor)
+      `(let ((,lock (shutdown-lock ,acceptor)))
+         (with-lock-held (,lock)
+           (incf (requests-in-progress ,acceptor)))
+         (unwind-protect 
+              (progn ,@body)
+           (with-lock-held (,lock)
+             (decf (requests-in-progress ,acceptor))
+             (when (shutdown-p ,acceptor)
+               (condition-notify (shutdown-queue ,acceptor)))))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -66,6 +66,7 @@
    ;; Configuration
    (port :initarg :port :reader port)
    (address :initarg :address :reader address)
+   (name :initarg :name :reader name)
    (persistent-connections-p :initarg :persistent-connections-p :accessor persistent-connections-p)
    (read-timeout :initarg :read-timeout :reader read-timeout)
    (write-timeout :initarg :write-timeout :reader write-timeout)
@@ -76,8 +77,14 @@
    (handler :initarg :handler :accessor handler)
    (error-generator :initarg :error-generator :accessor error-generator)
    (taskmaster :initarg :taskmaster :reader taskmaster)
-   (access-loggger :initarg :access-logger :initform *default-logger* :accessor access-logger)
-   (message-logger :initarg :message-logger :initform *default-logger* :accessor message-logger)
+   (access-loggger 
+    :initarg :access-logger
+    :initform (make-instance 'stream-logger :destination *error-output*)
+    :accessor access-logger)
+   (message-logger 
+    :initarg :message-logger
+    :initform (make-instance 'stream-logger :destination *error-output*)
+    :accessor message-logger)
 
    ;; State
    (listen-socket :initform nil :accessor listen-socket)
@@ -89,6 +96,7 @@
   (:default-initargs
     :address nil
     :port 80
+    :name (format nil "Toot ~a" *toot-version*)
     :listen-backlog 50
     :taskmaster (make-instance *default-taskmaster-class*)
     :persistent-connections-p t
@@ -258,6 +266,7 @@ different thread than accept-connection is running in."
   (handler-bind ((error
                   ;; abort if there's an error which isn't caught inside
                   (lambda (cond)
+                    (maybe-invoke-debugger cond)
                     (log-message 
                      acceptor
                      *lisp-errors-log-level* 
@@ -784,9 +793,7 @@ flexi-stream based on the content-type and charset, if needed."
 
     (set-header :date (rfc-1123-date))
     (set-header :content-type (full-content-type request))
-    ;; FIXME: Do we possibly want to allow the user to set this per
-    ;; request? Also could put it on the acceptor.
-    (set-header :server (format nil "Toot ~a" *toot-version*))
+    (set-header :server (name (acceptor request)))
     
     ;; Chunked encoding only available in http/1.1 and only needed if
     ;; we don't know the length of the content we're sending.

@@ -35,15 +35,11 @@
    (secure    :initarg :secure    :initform nil :accessor cookie-secure)
    (http-only :initarg :http-only :initform nil :accessor cookie-http-only)))
 
-(defmethod initialize-instance :around ((cookie cookie) &rest init-args)
+(defmethod initialize-instance :around ((cookie cookie) &key name &allow-other-keys)
   "Ensure COOKIE has a correct slot-value for NAME."
-  (let ((name (getf init-args :name)))
-    (unless (http-token-p name)
-      (parameter-error "~S is not a legal name for a cookie." name)))
+  (unless (http-token-p name)
+    (parameter-error "~S is not a legal name for a cookie." name))
   (call-next-method))
-
-(defun cookie-date (universal-time)
-  (and universal-time (rfc-1123-date universal-time)))
 
 (defun stringify-cookie (cookie)
   (format nil
@@ -55,3 +51,6 @@
           (cookie-domain cookie)
           (cookie-secure cookie)
           (cookie-http-only cookie)))
+
+(defun cookie-date (universal-time)
+  (and universal-time (rfc-1123-date universal-time)))

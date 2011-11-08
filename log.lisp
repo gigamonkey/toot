@@ -65,8 +65,8 @@ facility."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Logging API -- the server logs HTTP requests and miscelaneous
-;; messages using these two generic functions, called on a logger
-;; object held by the server. The 
+;; messages using these two generic functions, called on logger
+;; objects held by the server.
 
 (defgeneric log-access (logger request)
   (:documentation "Write a log entry for the request to the access log."))
@@ -98,8 +98,8 @@ facility."
             (server-protocol request)
             (status-code request)
             (content-length request)
-            (referer request)
-            (user-agent request))))
+            (request-header :referer request)
+            (request-header :user-agent request))))
 
 (defmethod log-message ((logger stream-logger) log-level format-string &rest format-arguments)
   (with-log-stream (stream (destination logger) (lock logger))

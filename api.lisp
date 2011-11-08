@@ -41,7 +41,7 @@ NAME should be a keyword or a string."
 
 (defun (setf response-header) (new-value name request)
   "Changes the current value of the outgoing http header named NAME
-\(a keyword or a string). If a header with this name doesn't exist, it
+(a keyword or a string). If a header with this name doesn't exist, it
 is created."
   (when (headers-sent-p request)
     (error "Can't set reply headers after headers have been sent."))
@@ -93,9 +93,14 @@ SEND-HEADERS has not been called."
   (setf (status-code request) response-status-code)
   (throw 'handler-done body))
 
+(defun request-header (name request)
+  "Returns the incoming header with name NAME. NAME can be a
+keyword (recommended) or a string."
+  (cdr (assoc* name (request-headers request))))
+
 (defun authorization (request)
-  "Returns as two values the user and password \(if any) as encoded in
-the 'AUTHORIZATION' header.  Returns NIL if there is no such header."
+  "Returns as two values the user and password (if any) as encoded in
+the 'AUTHORIZATION' header. Returns NIL if there is no such header."
   (let* ((authorization (request-header :authorization request))
          (start (and authorization
                      (> (length authorization) 5)
@@ -106,45 +111,27 @@ the 'AUTHORIZATION' header.  Returns NIL if there is no such header."
           (split ":" (base64:base64-string-to-string (subseq authorization start)))
         (values user password)))))
 
-(defun host (request)
-  "Returns the 'Host' incoming http header value."
-  (request-header :host request))
-
-(defun user-agent (request)
-  "Returns the 'User-Agent' http header."
-  (request-header :user-agent request))
-
-(defun request-header (name request)
-  "Returns the incoming header with name NAME. NAME can be a keyword
-  \(recommended) or a string."
-  (cdr (assoc* name (request-headers request))))
-
-(defun cookie-in (name request)
-  "Returns the cookie with the name NAME \(a string) as sent by the
-browser - or NIL if there is none."
-  (cdr (assoc name (cookies-in request) :test #'string=)))
-
-(defun referer (request)
-  "Returns the 'Referer' \(sic!) http header."
-  (request-header :referer request))
-
 (defun get-parameter (name request)
-  "Returns the GET parameter with name NAME \(a string) - or NIL if
-there is none.  Search is case-sensitive."
+  "Returns the GET parameter with name NAME (a string) - or NIL if
+there is none. Search is case-sensitive."
   (cdr (assoc name (get-parameters request) :test #'string=)))
 
 (defun post-parameter (name request)
-  "Returns the POST parameter with name NAME \(a string) - or NIL if
-there is none.  Search is case-sensitive."
+  "Returns the POST parameter with name NAME (a string) - or NIL if
+there is none. Search is case-sensitive."
   (cdr (assoc name (post-parameters request) :test #'string=)))
 
 (defun parameter (name request)
-  "Returns the GET or the POST parameter with name NAME \(a string) -
-or NIL if there is none.  If both a GET and a POST parameter with the
-same name exist the GET parameter is returned.  Search is
+  "Returns the GET or the POST parameter with name NAME (a string) -
+or NIL if there is none. If both a GET and a POST parameter with the
+same name exist the GET parameter is returned. Search is
 case-sensitive."
   (or (get-parameter name request) (post-parameter name request)))
 
+(defun cookie-in (name request)
+  "Returns the cookie with the name NAME (a string) as sent by the
+browser - or NIL if there is none."
+  (cdr (assoc name (cookies-in request) :test #'string=)))
 
 (defun real-remote-addr (request)
   "Returns the 'X-Forwarded-For' incoming http header as the
@@ -160,11 +147,12 @@ Otherwise returns the value of REMOTE-ADDR as the only value."
 ;; if there's anything better to do.
 (defun serve-file (request pathname &optional content-type (charset *default-charset*))
   "Serve the file denoted by PATHNAME. Sends a content type header
-corresponding to CONTENT-TYPE or \(if that is NIL) tries to determine
+corresponding to CONTENT-TYPE or (if that is NIL) tries to determine
 the content type via the file's suffix. Aborts the request with 404:
 Not found if the file does not exist. Also handles an
 if-modified-since request appropriately."
-  (when (or (wild-pathname-p pathname)
+  (when (or (not pathname)
+            (wild-pathname-p pathname)
             (not (fad:file-exists-p pathname))
             (fad:directory-exists-p pathname))
     (abort-request-handler request +http-not-found+))
@@ -203,16 +191,14 @@ if-modified-since request appropriately."
 
 (defun no-cache (request)
   "Adds appropriate headers to completely prevent caching on most browsers."
-  (setf
-   ;; WTF is this date?! (Some cargo cult thing from PHP or maybe MSDN, it seems.)
-   (response-header :expires request) "Mon, 26 Jul 1997 05:00:00 GMT"
-   (response-header :cache-control request) "no-store, no-cache, must-revalidate, post-check=0, pre-check=0"
-   (response-header :pragma request) "no-cache"
-   (response-header :last-modified request) (rfc-1123-date))
-  (values))
+  ;; WTF is this date?! (Some cargo cult thing from PHP or maybe MSDN, it seems.)
+  (setf (response-header :expires request) "Mon, 26 Jul 1997 05:00:00 GMT")
+  (setf (response-header :cache-control request) "no-store, no-cache, must-revalidate, post-check=0, pre-check=0")
+  (setf (response-header :pragma request) "no-cache")
+  (setf (response-header :last-modified request) (rfc-1123-date)))
 
 (defun redirect (request target &key
-                 (host (host request))
+                 (host (request-header :host request))
                  port
                  (protocol (server-protocol request))
                  (code +http-moved-temporarily+))
@@ -237,8 +223,8 @@ If CODE is a 3xx redirection code, it will be sent as status code."
     (abort-request-handler request code)))
 
 (defun require-authorization (request &optional (realm "Toot"))
-  "Sends back appropriate headers to require basic HTTP authentication
-\(see RFC 2617) for the realm REALM."
+  "Sends back appropriate headers to require basic HTTP
+authentication (see RFC 2617) for the realm REALM."
   (setf (response-header :www-authenticate request)
         (format nil "Basic realm=\"~A\"" (quote-string realm)))
   (abort-request-handler request +http-authorization-required+))
@@ -255,12 +241,13 @@ TIME."
       (abort-request-handler request +http-not-modified+))
     (values)))
 
-;; FIXME: (enough-url "/foo/bar/baz.html" "/www/") =>
-;; "foo/bar/baz.html" which is probably not right.
 (defun enough-url (url url-prefix)
   "Returns the relative portion of URL relative to URL-PREFIX, similar
 to what ENOUGH-NAMESTRING does for pathnames."
-  (subseq url (or (mismatch url url-prefix) (length url-prefix))))
+  (let ((prefix-length (length url-prefix)))
+    (cond
+      ((string= url url-prefix :end1 prefix-length) (subseq url prefix-length))
+      (t url))))
 
 (defun set-cookie (name request &key (value "") expires path domain secure http-only)
   "Set a cookie to be sent with the reply."

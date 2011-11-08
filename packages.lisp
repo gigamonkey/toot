@@ -91,24 +91,40 @@
            :+http-use-proxy+
            :+http-version-not-supported+
 
-           :abort-request-handler
-
+           ;; Customizable and configurable parts of acceptor
            :port
            :address
-           :taskmaster
+           :name 
            :persistent-connections-p
            :read-timeout
            :write-timeout
+           
+           :handler
+           :error-generator
+           :taskmaster
            :access-logger
            :message-logger
 
+           ;; Functions to use in handlers
+           :abort-request-handler
            :authorization
+           :no-cache
+           :redirect
+           :handle-if-modified-since
+
+           :get-parameter
+           :post-parameter
+           :parameter
+           :cookie-in
+
+           :set-cookie
+
            :content-length
            :content-type
+
            :cookie-domain
            :cookie-expires
            :cookie-http-only
-           :cookie-in
            :cookie-name
            :cookie-out
            :cookie-path
@@ -116,26 +132,17 @@
            :cookie-value
            :cookies-in
            :cookies-out
-           :default-document-directory
            :escape-for-html
-           :get-parameter
-           :get-parameters
-           :handle-if-modified-since
            :serve-file
            :request-header
            :response-header
-           :host
            :http-token-p
            :toot-condition
            :toot-error
            :toot-warning
            :initialize-connection-stream
            :maybe-invoke-debugger
-           :mime-type
-           :no-cache
-           :parameter
            :parameter-error
-           :post-parameter
            :post-parameters
            :process-connection
            :process-request
@@ -144,8 +151,6 @@
            :real-remote-addr
            :reason-phrase
            :recompute-request-parameters
-           :redirect
-           :referer
            :remote-addr
            :remote-port
            :request
@@ -157,7 +162,6 @@
            :script-name
            :send-headers
            :server-protocol
-           :set-cookie
            :shutdown
            :start-server
            :start
@@ -165,5 +169,4 @@
            :single-threaded-taskmaster
            :thread-per-connection-taskmaster
            :url-decode
-           :url-encode
-           :user-agent))
+           :url-encode))
