@@ -799,7 +799,8 @@ flexi-stream based on the content-type and charset, if needed."
     (set-header :date (rfc-1123-date))
     (set-header :content-type (full-content-type request))
     (set-header :server (name (acceptor request)))
-    
+    (when (content-length request) (set-header :content-length (content-length request)))
+
     ;; Chunked encoding only available in http/1.1 and only needed if
     ;; we don't know the length of the content we're sending.
     (let* ((http/1.1-p (eql (server-protocol request) :http/1.1))
