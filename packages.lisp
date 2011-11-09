@@ -123,6 +123,9 @@
            :content-length
            :content-type
 
+           :not-handled
+           :maybe-handle
+
            :escape-for-html
            :serve-file
            :request-header
@@ -157,4 +160,5 @@
            :single-threaded-taskmaster
            :thread-per-connection-taskmaster
            :url-decode
-           :url-encode))
+           :url-encode
+           :safe-filename-p))
