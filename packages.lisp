@@ -116,6 +116,8 @@
            :get-parameter
            :post-parameter
            :post-parameters
+           :body-octets
+           :body-stream
            :parameter
            :cookie-value
            :set-cookie
@@ -138,10 +140,8 @@
            :maybe-invoke-debugger
            :parameter-error
            :query-string
-           :raw-post-data
            :real-remote-addr
            :reason-phrase
-           :recompute-request-parameters
            :remote-addr
            :remote-port
            :request

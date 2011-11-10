@@ -1,0 +1,61 @@
+<html>
+  <head>
+    <title>Form testing</title>
+  </head>
+  <body>
+    <h1>Form testing</h1>
+
+    <h2>Form test params (<code>application/x-www-form-urlencoded</code>)</h2>
+    <form action='/form-test-params' method='POST' enctype='application/x-www-form-urlencoded'>
+      <p>Foo: <input type='text' name='foo' value='Foo'></p>
+      <p>Bar: <input type='text' name='bar' value='Bar'></p>
+      <p>Baz: <input type='text' name='baz' value='Baz'></p>
+      <p><input type='submit' value='Submit'> <input type='reset' value='Reset'></p>
+    </form>
+
+    <h2>Form test params (<code>multipart/form-data</code>)</h2>
+    <form action='/form-test-params' method='POST' enctype='multipart/form-data'>
+      <p>Foo: <input type='text' name='foo' value='Foo'></p>
+      <p>Bar: <input type='text' name='bar' value='Bar'></p>
+      <p>Baz: <input type='text' name='baz' value='Baz'></p>
+      <p>File: <input type='file' name='file'></p>
+      <p><input type='submit' value='Submit'> <input type='reset' value='Reset'></p>
+    </form>
+
+    <h2>Form test octets (<code>application/x-www-form-urlencoded</code>)</h2>
+    <form action='/form-test-octets' method='POST' enctype='application/x-www-form-urlencoded'>
+      <p>Foo: <input type='text' name='foo' value='Foo'></p>
+      <p>Bar: <input type='text' name='bar' value='Bar'></p>
+      <p>Baz: <input type='text' name='baz' value='Baz'></p>
+      <p><input type='submit' value='Submit'> <input type='reset' value='Reset'></p>
+    </form>
+
+    <h2>Form test octets (<code>multipart/form-data</code>)</h2>
+    <form action='/form-test-octets' method='POST' enctype='multipart/form-data'>
+      <p>Foo: <input type='text' name='foo' value='Foo'></p>
+      <p>Bar: <input type='text' name='bar' value='Bar'></p>
+      <p>Baz: <input type='text' name='baz' value='Baz'></p>
+      <p>File: <input type='file' name='file'></p>
+      <p><input type='submit' value='Submit'> <input type='reset' value='Reset'></p>
+    </form>
+
+    <h2>Form test stream (<code>application/x-www-form-urlencoded</code>)</h2>
+    <form action='/form-test-stream' method='POST' enctype='application/x-www-form-urlencoded'>
+      <p>Foo: <input type='text' name='foo' value='Foo'></p>
+      <p>Bar: <input type='text' name='bar' value='Bar'></p>
+      <p>Baz: <input type='text' name='baz' value='Baz'></p>
+      <p><input type='submit' value='Submit'> <input type='reset' value='Reset'></p>
+    </form>
+
+    <h2>Form test stream (<code>multipart/form-data</code>)</h2>
+    <form action='/form-test-stream' method='POST' enctype='multipart/form-data'>
+      <p>Foo: <input type='text' name='foo' value='Foo'></p>
+      <p>Bar: <input type='text' name='bar' value='Bar'></p>
+      <p>Baz: <input type='text' name='baz' value='Baz'></p>
+      <p>File: <input type='file' name='file'></p>
+      <p><input type='submit' value='Submit'> <input type='reset' value='Reset'></p>
+    </form>
+
+
+  </body>
+</html>
