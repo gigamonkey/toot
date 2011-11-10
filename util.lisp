@@ -82,14 +82,11 @@ according to HTTP/1.1 \(RFC 2068)."
 
 (defun tmp-filename ()
   (loop for pathname = (possible-tmp-filename)
-     when (try-create-tmp-file pathname) return pathname))
+     when (not (probe-file pathname)) return pathname))
 
 (defun possible-tmp-filename ()
   (let ((n (with-lock-held (*tmp-counter-lock*) (incf *tmp-counter*))))
-    (make-pathname :name n :type nil :defaults *tmp-directory*)))
-
-(defun try-create-tmp-file (pathname)
-  (with-open-file (p pathname :direction :output :if-exists nil :if-does-not-exist :create) p))
+    (make-pathname :name (format nil "toottmp-~d" n) :type nil :defaults *tmp-directory*)))
 
 (defun quote-string (string)
   "Quotes string according to RFC 2616's definition of `quoted-string'."
