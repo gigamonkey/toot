@@ -574,7 +574,7 @@ request body. By default, the encoding is determined from the
 Content-Type header of the request or from *DEFAULT-EXTERNAL-FORMAT*
 if none is found."
   (when (and (request-header :content-type request)
-             (member (request-method request) *methods-for-post-parameters* :test #'eql)
+             (member (request-method request) *methods-for-post-parameters*)
              (or force
                  (not (slot-value request 'raw-post-data)))
 	     ;; can't reparse multipart posts, even when FORCEd
