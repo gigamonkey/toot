@@ -116,3 +116,41 @@ header-in -> request-header
 headers-out -> reply-headers
 header-out -> reply-header
 return-code -> http-status-code or status-code
+
+* For docs
+
+Note that server-protocol is taken from the request line so is
+something like :http/1.1 or :http/1.0. It will be one of thes even if
+the request was made over HTTPS.
+
+
+* Reading post data
+
+post-parameters -> maybe-read-post-parameters -> raw-post-data -> read-request-body
+
+maybe-read-post-parameters -> parse-multipart-form-data -> parse-rfc2388-form-data
+
+
+1. Request comes in.
+
+2. Read headers. Stream is sitting at body. Handler is invoked.
+
+3. Handler code may:
+
+  1. Ask for post parameters. Toot reads and parses them. Stores alist
+  in request object for later retrieving individual parameters. If the
+  request is multipart/form the post-parameters values will contain
+  lists including the name of the tmp file where the file upload
+  elements were saved.
+
+  2. Ask for the stream. Give it to them. They can do whatever they
+  want.
+
+  3. Ignore the post data. Do nothing.
+
+4. Request has been handled. Drain stream and discard.
+
+
+* To do:
+
+charset, external-format, encoding audit
