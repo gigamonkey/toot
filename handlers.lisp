@@ -34,9 +34,12 @@
      (t 'not-handled)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Function as a handler
+;;; Function and symbols as handlers.
 
 (defmethod handle-request ((handler function) request)
+  (funcall handler request))
+
+(defmethod handle-request ((handler symbol) request)
   (funcall handler request))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -115,7 +118,7 @@ file name of the request is exactly the given PATH."
 ;;; one that can handle the request.
 
 (defclass search-handler ()
-  ((handlers :initarg handlers :initform () :accessor handlers)))
+  ((handlers :initarg :handlers :initform () :accessor handlers)))
 
 (defun make-search-handler (&rest sub-handlers)
   (make-instance 'search-handler :handlers sub-handlers))
@@ -146,3 +149,4 @@ file name of the request is exactly the given PATH."
                   (escape-for-html (princ-to-string error))
                   (when (and backtrace *show-lisp-backtraces-p*)
                     (escape-for-html (princ-to-string backtrace))))))))
+
