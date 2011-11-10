@@ -138,6 +138,9 @@ file name of the request is exactly the given PATH."
 (defmethod generate-error-page ((generator function) request &key error backtrace)
   (funcall generator request error backtrace))
 
+(defmethod generate-error-page ((generator symbol) request &key error backtrace)
+  (funcall generator request error backtrace))
+
 (defun default-error-message-generator (request error backtrace)
   "A function that generates a bare-bones error page to be used as an error page generator."
   (let ((status-code (status-code request)))
