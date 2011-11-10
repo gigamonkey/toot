@@ -193,29 +193,40 @@ if-modified-since request appropriately."
   (setf (response-header :last-modified request) (rfc-1123-date)))
 
 (defun redirect (request target &key
-                 (host (request-header :host request))
-                 port
-                 (protocol (server-protocol request))
-                 (code +http-moved-temporarily+))
-  "Redirects the browser to TARGET which should be a string. If TARGET
+                 (code +http-moved-temporarily+)
+                 protocol
+                 host
+                 port)
+  "Redirects the browser to TARGET with status code CODE. Target must
+be a string and CODE should be one of the 3xx status codes. If TARGET
 is a full URL starting with a scheme, HOST, PORT and PROTOCOL are
-ignored. Otherwise, TARGET should denote the path part of a URL,
-PROTOCOL must be one of the keywords :HTTP or :HTTPS, and the URL to
-redirect to will be constructed from HOST, PORT, PROTOCOL, and TARGET.
-If CODE is a 3xx redirection code, it will be sent as status code."
+ignored. Otherwise, TARGET should denote the path part of a URL and
+the protocol, host, and port can be specified via keyword args. Any
+values not specified will be taken from the current request. (Note,
+however, that if no port was specified in the Host: header of the
+request, the redirect will likewise have no explicit port; if the
+protocol was changed this will result in a redirect to the default
+port for the new protocol. CODE must be a 3xx redirection code and
+will be sent as status code."
   (check-type code (integer 300 399))
-  (let ((url (if (starts-with-scheme-p target)
-               target
-               (format nil "~A://~A~@[:~A~]~A"
-                       (ecase protocol
-                         ((:http) "http")
-                         ((:https) "https"))
-                       (if port
-                         (first (ppcre:split ":" (or host "")))
-                         host)
-                       port target))))
+  (let ((url
+         (if (starts-with-scheme-p target) 
+             target
+             (let* ((requested-host (request-header :host request))
+                    (current-protocol (if (ssl-config (acceptor request)) :https :http)))
+               (format nil "~(~a~)://~a~@[:~a~]~a"
+                       (or protocol current-protocol)
+                       (or host (just-host requested-host))
+                       (or port (just-port requested-host)))))))
     (setf (response-header :location request) url)
     (abort-request-handler request code)))
+
+(defun just-host (host-and-port)
+  (subseq host-and-port 0 (position #\: host-and-port)))
+
+(defun just-port (host-and-port)
+  (let ((colon (position #\: host-and-port)))
+    (and colon (subseq host-and-port (1+ colon)))))
 
 (defun require-authorization (request &optional (realm "Toot"))
   "Sends back appropriate headers to require basic HTTP
