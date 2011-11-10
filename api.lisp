@@ -217,7 +217,8 @@ will be sent as status code."
                (format nil "~(~a~)://~a~@[:~a~]~a"
                        (or protocol current-protocol)
                        (or host (just-host requested-host))
-                       (or port (just-port requested-host)))))))
+                       (or port (just-port requested-host))
+                       target)))))
     (setf (response-header :location request) url)
     (abort-request-handler request code)))
 
