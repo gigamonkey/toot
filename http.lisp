@@ -45,7 +45,6 @@ order to finish shutdown processing."
              (when (shutdown-p ,acceptor)
                (condition-notify (shutdown-queue ,acceptor)))))))))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Generic functions to be implemented by users to customize the
 ;;; server. See handlers.lisp for some built in handlers and error
@@ -564,7 +563,7 @@ remaining on the stream will be drained."
   ;; +latin-1+ external format. But we want a flexi-stream because we
   ;; want to be able to set the stream-bound. Perhaps could look into
   ;; using trivial-gray-stream-mixin ourself to define such a stream.
-  ;; (We need to return such a limitted stream to make sure user code
+  ;; (We need to return such a limited stream to make sure user code
   ;; doesn't read the beginning of the next request on a persistent
   ;; connection.)
 
