@@ -116,7 +116,7 @@ order to finish shutdown processing."
    (request-method :initarg :request-method :reader request-method) ; cgi REQUEST_METHOD
    (query-string :initform nil :reader query-string) ; cgi QUERY_STRING
    (server-protocol :initarg :server-protocol :reader server-protocol) ; cgi SERVER_PROTOCOL
-   (uri :initarg :uri :reader request-uri)
+   (request-uri :initarg :request-uri :reader request-uri)
    (get-parameters :initform nil :reader get-parameters) 
    (post-parameters :initform nil :reader post-parameters)
    (body-stream :initform nil :reader body-stream)
@@ -146,13 +146,13 @@ order to finish shutdown processing."
   (with-slots (request-headers cookies-in get-parameters script-name query-string) request
     (handler-case*
         (progn
-          (let* ((uri (request-uri request))
-                 (match-start (position #\? uri)))
+          (let* ((request-uri (request-uri request))
+                 (match-start (position #\? request-uri)))
             (cond
               (match-start
-               (setf script-name (subseq uri 0 match-start))
-               (setf query-string (subseq uri (1+ match-start))))
-              (t (setf script-name uri))))
+               (setf script-name (subseq request-uri 0 match-start))
+               (setf query-string (subseq request-uri (1+ match-start))))
+              (t (setf script-name request-uri))))
 
           ;; some clients (e.g. ASDF-INSTALL) send requests like
           ;; "GET http://server/foo.html HTTP/1.0"...
@@ -312,7 +312,7 @@ different thread than accept-connection is running in."
                                            :request-headers request-headers
                                            :content-stream content-stream
                                            :request-method request-method
-                                           :uri url-string
+                                           :request-uri url-string
                                            :server-protocol protocol))
                         (process-request request)
                         (log-access (access-logger acceptor) request)))
