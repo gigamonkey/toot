@@ -136,7 +136,6 @@
            :toot-condition
            :toot-error
            :toot-warning
-           :initialize-connection-stream
            :maybe-invoke-debugger
            :parameter-error
            :real-remote-addr
