@@ -26,25 +26,6 @@
 
 (in-package :toot)
 
-;; Helper macro
-
-(defmacro with-request-count-incremented ((acceptor) &body body)
-  "Execute BODY with REQUESTS-IN-PROGRESS of ACCEPTOR incremented by
-one. If the SHUTDOWN-P returns true after the BODY has been executed,
-the SHUTDOWN-QUEUE condition variable of the ACCEPTOR is signalled in
-order to finish shutdown processing."
-  (with-unique-names (lock)
-    (once-only (acceptor)
-      `(let ((,lock (shutdown-lock ,acceptor)))
-         (with-lock-held (,lock)
-           (incf (requests-in-progress ,acceptor)))
-         (unwind-protect
-              (progn ,@body)
-           (with-lock-held (,lock)
-             (decf (requests-in-progress ,acceptor))
-             (when (shutdown-p ,acceptor)
-               (condition-notify (shutdown-queue ,acceptor)))))))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Request handlers. New handlers can be defined by providing methods
 ;;; on this generic function.
@@ -284,41 +265,47 @@ different thread than accept-connection is running in."
              ;; process requests until either the acceptor is shut
              ;; down, close-stream-p on the most recent request is T,
              ;; or the peer fails to send a request
-             (loop
-                (when (shutdown-p acceptor) (return))
+             (loop until (shutdown-p acceptor) do
+                  (multiple-value-bind (request-headers request-method url-string protocol)
+                      (read-request content-stream)
+                    ;; check if there was a request at all
+                    (unless request-method (return))
 
-                (multiple-value-bind (request-headers request-method url-string protocol)
-                    (read-request content-stream)
-                  ;; check if there was a request at all
-                  (unless request-method (return))
-                  (let ((request nil)
-                        (transfer-encodings (cdr (assoc :transfer-encoding request-headers))))
+                    (let ((transfer-encodings (cdr (assoc :transfer-encoding request-headers))))
 
-                    (when transfer-encodings
-                      (setf transfer-encodings (split "\\s*,\\s*" transfer-encodings))
+                      (when transfer-encodings
+                        (setf transfer-encodings (split "\\s*,\\s*" transfer-encodings))
 
-                      (when (member "chunked" transfer-encodings :test #'equalp)
-                        ;; turn chunking on before we read the request body
-                        (setf content-stream (make-chunked-stream content-stream))
-                        (setf (chunked-stream-input-chunking-p content-stream) t)))
+                        (when (member "chunked" transfer-encodings :test #'equalp)
+                          ;; turn chunking on before we read the request body
+                          (setf content-stream (make-chunked-stream content-stream))
+                          (setf (chunked-stream-input-chunking-p content-stream) t)))
 
-                    (multiple-value-bind (remote-addr remote-port)
-                        (get-peer-address-and-port socket)
-                      (with-request-count-incremented (acceptor)
-                        (setf request (make-instance 'request
-                                           :acceptor acceptor
-                                           :remote-addr remote-addr
-                                           :remote-port remote-port
-                                           :request-headers request-headers
-                                           :content-stream content-stream
-                                           :request-method request-method
-                                           :request-uri url-string
-                                           :server-protocol protocol))
-                        (process-request request)
-                        (log-access (access-logger acceptor) request)))
-                    (force-output content-stream)
-                    (setf content-stream (unchunked-stream content-stream))
-                    (when (close-stream-p request) (return)))))
+                      (multiple-value-bind (remote-addr remote-port)
+                          (get-peer-address-and-port socket)
+
+                        (let ((lock (shutdown-lock acceptor))
+                              (request (make-instance 'request
+                                         :acceptor acceptor
+                                         :remote-addr remote-addr
+                                         :remote-port remote-port
+                                         :request-headers request-headers
+                                         :content-stream content-stream
+                                         :request-method request-method
+                                         :request-uri url-string
+                                         :server-protocol protocol)))
+                          (with-lock-held (lock) (incf (requests-in-progress acceptor)))
+                          (unwind-protect
+                               (progn
+                                 (process-request request)
+                                 (log-access (access-logger acceptor) request))
+                            (with-lock-held (lock)
+                              (decf (requests-in-progress acceptor))
+                              (when (shutdown-p acceptor)
+                                (condition-notify (shutdown-queue acceptor)))))
+                          (force-output content-stream)
+                          (setf content-stream (unchunked-stream content-stream))
+                          (when (close-stream-p request) (return)))))))
 
           (when content-stream
             ;; As we are at the end of the requests here, we ignore
@@ -461,9 +448,7 @@ by Chunga's read-http-headers method."
                ;; according to 14.20 in the RFC - we should actually
                ;; check if we have to respond with 417 here
                (let ((continue-line
-                      (format nil "HTTP/1.1 ~D ~A"
-                              +http-continue+
-                              (reason-phrase +http-continue+))))
+                      (format nil "HTTP/1.1 ~D ~A" +http-continue+ (reason-phrase +http-continue+))))
                  (write-sequence (map 'list #'char-code continue-line) stream)
                  (write-sequence +crlf+ stream)
                  (write-sequence +crlf+ stream)
