@@ -26,47 +26,10 @@
 
 (in-package :toot)
 
-(defmacro with-log-stream ((stream-var destination lock) &body body)
-  "Helper macro to write log entries.  STREAM-VAR is a symbol that
-will be bound to the logging stream during the execution of BODY.
-DESTINATION is the logging destination, which can be either a pathname
-designator of the log file, a symbol designating an open stream or NIL
-if logging should be done to *ERROR-OUTPUT*.  LOCK refers to the lock
-that should be held during the logging operation.  If DESTINATION is a
-pathname, a flexi stream with UTF-8 encoding will be created and
-bound to STREAM-VAR.  If an error occurs while writing to the log
-file, that error will be logged to *ERROR-OUTPUT*.
-
-Note that logging to a file involves opening and closing the log file
-for every logging operation, which is overall costly.  Web servers
-with high throughput demands should make use of a specialized logging
-function rather than relying on Toot's default logging
-facility."
-  (with-unique-names (binary-stream)
-    (once-only (destination)
-      (let ((body body))
-        `(when ,destination
-           (with-lock-held (,lock)
-             (etypecase ,destination
-               ((or string pathname)
-                (with-open-file (,binary-stream ,destination
-                                                :direction :output
-                                                :element-type 'octet
-                                                :if-does-not-exist :create
-                                                :if-exists :append
-                                                #+:openmcl #+:openmcl
-                                                :sharing :lock)
-                  (let ((,stream-var (make-flexi-stream ,binary-stream :external-format +utf-8+)))
-                    ,@body)))
-               (stream
-                (let ((,stream-var ,destination))
-                  (prog1 (progn ,@body)
-                    (finish-output *error-output*)))))))))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Logging API -- the server logs HTTP requests and miscelaneous
-;; messages using these two generic functions, called on logger
-;; objects held by the server.
+;;; Logging API -- the server logs HTTP requests and miscelaneous
+;;; messages using these two generic functions, called on logger
+;;; objects held by the server.
 
 (defgeneric log-access (logger request)
   (:documentation "Write a log entry for the request to the access log."))
@@ -74,9 +37,8 @@ facility."
 (defgeneric log-message (logger log-level format-string &rest format-arguments)
   (:documentation "Write a log entry to the message log."))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Simple logger for logging to a stream
+;;; Simple logger for logging to an open character stream.
 
 (defclass stream-logger ()
   ((destination :initarg :destination :reader destination)
@@ -84,25 +46,26 @@ facility."
 
 (defvar *default-logger* (make-instance 'stream-logger :destination *error-output*))
 
-(defmethod  log-access ((logger stream-logger) request)
-  (with-log-stream (stream (destination logger) (lock logger))
-    (format stream "~:[-~@[ (~A)~]~;~:*~A~@[ (~A)~]~] ~:[-~;~:*~A~] [~A] \"~A ~A ~
+(defmethod log-access ((logger stream-logger) request)
+  (let ((out (destination logger)))
+    (with-lock-held ((lock logger))
+      (format out "~:[-~@[ (~A)~]~;~:*~A~@[ (~A)~]~] ~:[-~;~:*~A~] [~A] \"~A ~A ~
                     ~A\" ~D ~:[-~;~:*~D~] \"~:[-~;~:*~A~]\" \"~:[-~;~:*~A~]\"~%"
-            (remote-addr request)
-            (request-header :x-forwarded-for request)
-            (authorization request)
-            (iso-time)
-            (request-method request)
-            (request-uri request)
-            (server-protocol request)
-            (status-code request)
-            (content-length request)
-            (request-header :referer request)
-            (request-header :user-agent request))))
+              (remote-addr request)
+              (request-header :x-forwarded-for request)
+              (authorization request)
+              (iso-time)
+              (request-method request)
+              (request-uri request)
+              (server-protocol request)
+              (status-code request)
+              (content-length request)
+              (request-header :referer request)
+              (request-header :user-agent request))
+      (finish-output out))))
 
 (defmethod log-message ((logger stream-logger) log-level format-string &rest format-arguments)
-  (with-log-stream (stream (destination logger) (lock logger))
-    (format stream "[~A~@[ [~A]~]] ~?~%"
-            (iso-time) log-level
-            format-string format-arguments)))
-
+  (let ((out (destination logger)))
+    (with-lock-held ((lock logger))
+      (format out "[~A~@[ [~A]~]] ~?~%" (iso-time) log-level format-string format-arguments)
+      (finish-output out))))
