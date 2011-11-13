@@ -100,7 +100,7 @@
     :error-generator #'default-error-message-generator))
 
 (defmethod initialize-instance :after ((acceptor acceptor) &key &allow-other-keys)
-  (with-slots (port ssl-config) request
+  (with-slots (port ssl-config) acceptor
     (unless port
       (setf port (if ssl-config 443 80)))))
 
@@ -189,41 +189,6 @@
 (defmethod log-message ((request request) log-level format-string &rest format-arguments)
   (apply #'log-message (acceptor request) log-level format-string format-arguments))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Start and stop the server
-
-(defun start-server (&key port (handler (error "Must specify handler.")))
-  (start-accepting (make-instance 'acceptor :port port :handler handler)))
-
-(defun start-accepting (acceptor)
-  (when (listen-socket acceptor)
-    (toot-error "acceptor ~A is already listening" acceptor))
-
-  (setf (shutdown-p acceptor) nil)
-  (setf (listen-socket acceptor)
-        (usocket:socket-listen
-         (or (address acceptor) usocket:*wildcard-host*) (port acceptor)
-         :reuseaddress t
-         :backlog (listen-backlog acceptor)
-         :element-type '(unsigned-byte 8)))
-  (execute-acceptor (taskmaster acceptor) acceptor)
-  acceptor)
-
-(defun stop-accepting (acceptor &key soft)
-  (setf (shutdown-p acceptor) t)
-  (shutdown (taskmaster acceptor) acceptor)
-  (when soft
-    (with-lock-held ((shutdown-lock acceptor))
-      ;; FIXME: seems like this should perhaps be a while loop not a
-      ;; WHEN? The thread which called STOP is waiting here while all
-      ;; the threads processing requests will signal on the
-      ;; shutdown-queue
-      (when (plusp (requests-in-progress acceptor))
-        (condition-wait (shutdown-queue acceptor) (shutdown-lock acceptor)))))
-  (usocket:socket-close (listen-socket acceptor))
-  (setf (listen-socket acceptor) nil)
-  acceptor)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Server -- these functions interact with a taskmaster to implement

@@ -35,8 +35,8 @@
 
    ;; Starting and stopping acceptor
    :start-server
-   :start-accepting
-   :stop-accepting
+   :start-acceptor
+   :stop-acceptor
 
    ;; Configurable parts of acceptor
    :port
@@ -50,35 +50,41 @@
    ;; Pluggable parts of acceptor
    :handler
    :error-generator
-   :taskmaster
    :access-logger
    :message-logger
+   :taskmaster
 
    ;; To use in handlers
    :abort-request-handler
-   :authorization
    :no-cache
    :redirect
    :handle-if-modified-since
    :require-authorization
+   :authorization
    :not-handled
    :maybe-handle
 
    ;; Query the request
-   :post-parameters
-   :body-octets
-   :body-stream
-   :get-parameter
-   :post-parameter
-   :parameter
-   :cookie-value
+   :request-method
+   :request-uri
+   :server-protocol
    :request-header
    :remote-addr
    :remote-port
-   :request-method
    :real-remote-addr
-   :request-uri
-   :server-protocol
+
+   ;; Three ways to get at the body of the request
+   :post-parameters
+   :body-octets
+   :body-stream
+
+   ;; Slightly higher level access to parameters
+   :get-parameter
+   :post-parameter
+   :parameter
+
+   ;; Incoming cookies
+   :cookie-value
 
    ;; Control the response
    :send-headers

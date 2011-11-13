@@ -27,6 +27,49 @@
 (in-package :toot)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Start and stop the server
+
+(defun start-server (&rest args &key (handler (error "Must specify handler.")) port)
+  "Instantiate an acceptor and start it listening."
+  (start-acceptor
+   (apply #'make-instance 'acceptor
+          :handler handler
+          :port port
+          (sans args :handler :port))))
+
+(defun start-acceptor (acceptor)
+  "Start an existing acceptor listening for connections."
+  (when (listen-socket acceptor)
+    (toot-error "acceptor ~A is already listening" acceptor))
+
+  (setf (shutdown-p acceptor) nil)
+  (setf (listen-socket acceptor)
+        (usocket:socket-listen
+         (or (address acceptor) usocket:*wildcard-host*) (port acceptor)
+         :reuseaddress t
+         :backlog (listen-backlog acceptor)
+         :element-type '(unsigned-byte 8)))
+  (execute-acceptor (taskmaster acceptor) acceptor)
+  acceptor)
+
+(defun stop-acceptor (acceptor &key soft)
+  "Start an acceptor from listening for connections. It can be
+restarted with START-ACCEPTOR."
+  (setf (shutdown-p acceptor) t)
+  (shutdown (taskmaster acceptor) acceptor)
+  (when soft
+    (with-lock-held ((shutdown-lock acceptor))
+      ;; FIXME: seems like this should perhaps be a while loop not a
+      ;; WHEN? The thread which called STOP is waiting here while all
+      ;; the threads processing requests will signal on the
+      ;; shutdown-queue
+      (when (plusp (requests-in-progress acceptor))
+        (condition-wait (shutdown-queue acceptor) (shutdown-lock acceptor)))))
+  (usocket:socket-close (listen-socket acceptor))
+  (setf (listen-socket acceptor) nil)
+  acceptor)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public API
 
 (defmacro maybe-handle (test &body body)
