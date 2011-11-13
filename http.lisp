@@ -447,14 +447,7 @@ by Chunga's read-http-headers method."
              (when (member "100-continue" (split "\\s*,\\s*" expectations) :test #'equalp)
                ;; according to 14.20 in the RFC - we should actually
                ;; check if we have to respond with 417 here
-               (let ((continue-line
-                      (format nil "HTTP/1.1 ~D ~A" +http-continue+ (reason-phrase +http-continue+))))
-                 (write-sequence (map 'list #'char-code continue-line) stream)
-                 (write-sequence +crlf+ stream)
-                 (write-sequence +crlf+ stream)
-                 (force-output stream)
-                 (when *header-stream*
-                   (format *header-stream* "~A~%" continue-line)))))
+               (write-simple-response stream +http-continue+)))
            (values headers
                    (as-keyword request-method)
                    url-string
@@ -679,7 +672,7 @@ returned."
 ;; FIXME: probably should send HTTP/1.0 if the request was.
 (defun send-bad-request-response (stream &optional additional-info)
   (write-simple-response
-   (make-header-stream stream)
+   stream
    +http-bad-request+
    '((:connection . "close"))
    (format nil "Your request could not be interpreted by this HTTP server~C~C~@[~A~C~C~]"
@@ -695,17 +688,16 @@ returned."
 object. This can be used by taskmasters when they cannot accept a
 connection."
   (write-simple-response
-   (make-header-stream (make-socket-stream socket acceptor))
+   (make-socket-stream socket acceptor)
    +http-service-unavailable+
    ;; FIXME: hmmm. this was :content rather than :content-length but
    ;; I'm thinking that was a translation error. check. And maybe
    ;; more to the point, it should be :connection . "close" like in
    ;; send-bad-request-response.
-   '((:content-length . 0))
-   nil))
+   '((:content-length . 0))))
 
-(defun write-simple-response (stream status-code headers content)
-  (with-open-stream (s stream)
+(defun write-simple-response (stream status-code &optional headers content)
+  (with-open-stream (s (make-header-stream stream))
     (write-status-line stream status-code)
     (write-headers stream headers)
     (write-line-crlf stream "")
