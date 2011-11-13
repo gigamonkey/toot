@@ -38,6 +38,15 @@
   (:documentation "Write a log entry to the message log."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Null logger
+
+(defmethod log-access ((logger null) request)
+  (declare (ignore request)))
+
+(defmethod log-message ((logger null) log-level format-string &rest format-arguments)
+  (declare (ignore log-level format-string format-arguments)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Simple logger for logging to an open character stream.
 
 (defclass stream-logger ()
