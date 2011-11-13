@@ -1,49 +1,5 @@
 -*- mode: markup; -*-
 
-* Parts
-
-** Acceptors 
-
-Manage a server socket and accept connections from clients. Each
-acceptor has a \code{taskmaster} which is responsible for calling
-\code{accept-connections} and \code{process-connection} for each
-connection. Acceptors can optionally be configured with an SSL
-certificate in which case they will provide an HTTPS, rather than
-HTTP, listener.
-
-** Requests
-
-When it processes a connection, the acceptor reads a series of HTTP
-requests for the client and turns them into \code{request} objects.
-The \code{request} object holds all the information about the request
-including the request-uri, method, http-version, all the headers (as
-an alist with the header names as lower-cased keywords), incoming
-cookies, and get and post parameters. It also is used to hold
-information about the response generated when the request is handled.
-
-** Handlers
-
-Handlers are responsible for taking a request and generating a
-response. Toot invokes handlers via the generic function
-\code{handle-request} which has two argument, the handler and the
-request. Out of the box, Toot provides methods specializing the
-handler argument on \code{function} and \code{symbol}, that funcall
-the handler, which should denote a function of a single argument, with
-the request object.
-
-** Error page generators
-
-When Toot needs to send an error page it uses the generic function
-\code{generate-error-page} called on an error page generator, the
-request, and with keyword arguments specifying the error and backtrace
-if applicable.
-
-** Taskmasters
-
-Actually run the acceptors, either everything in one thread (a
-single-threaded-taskmaster) or in a dedicated thread for
-accept-connection and a new thread for each process-connection.
-
 * What I did
 
 ** Gross stripping
@@ -84,7 +40,7 @@ Possibly combine request and reply objects into a single object.
 
 * Threading
 
-create-request-handler-thread assumes that we will create 
+create-request-handler-thread assumes that we will create
 
 * Bugs?
 
@@ -112,12 +68,12 @@ Logging (where to and what format)
 
 * Flow
 
-[acceptor] start -> 
+[acceptor] start ->
 [taskmaster] execute-acceptor ->
-[acceptor] accept-connections (in new thread) -> 
-[taskmaster] handle-incoming-connection -> 
-[acceptor] process-connection (in new thread for each connection)-> 
-[request] process-request (in loop) -> 
+[acceptor] accept-connections (in new thread) ->
+[taskmaster] handle-incoming-connection ->
+[acceptor] process-connection (in new thread for each connection)->
+[request] process-request (in loop) ->
 dispatch to user code.
 
 * Response generation
