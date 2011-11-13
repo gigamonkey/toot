@@ -426,8 +426,7 @@ is a list of (NAME . VALUE)"))
                                                               :line-termination :unix))
                          (read-until-next-boundary input boundary nil out-file))
                      (declare (ignore text))
-                     (when (and (stringp file-name)
-                                (plusp (length file-name)))
+                     (when (and (stringp file-name) (plusp (length file-name)))
                        (push (make-mime-part temp-file headers) result))
                      (when (not more)
                        (return)))))
@@ -462,10 +461,8 @@ is a list of (NAME . VALUE)"))
 
 (defun find-content-disposition-header (headers)
   (find-if (lambda (header)
-             (and (string-equal "CONTENT-DISPOSITION"
-                                (header-name header))
-                  (string-equal "FORM-DATA"
-                                (header-value header))))
+             (and (string-equal "CONTENT-DISPOSITION" (header-name header))
+                  (string-equal "FORM-DATA" (header-value header))))
            headers))
 
 
