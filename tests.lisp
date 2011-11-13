@@ -35,6 +35,31 @@
 (defun reset-test-handler ()
   (setf (handler *test-acceptor*) (test-handler)))
 
+;;; Simple composite handler that searches a list of sub-handlers for
+;;; one that can handle the request.
+
+(defclass search-handler ()
+  ((handlers :initarg :handlers :initform () :accessor handlers)))
+
+(defun make-search-handler (&rest sub-handlers)
+  (make-instance 'search-handler :handlers sub-handlers))
+
+(defun add-handler (search-handler sub-handler)
+  (push sub-handler (handlers search-handler)))
+  
+(defmethod handle-request ((handler search-handler) request)
+  (loop for sub in (handlers handler)
+     for result = (handle-request sub request)
+     when (not (eql result 'not-handled)) return result
+     finally (return 'not-handled)))
+
+(defun make-exact-path-handler (path sub-handler)
+  "Make a handler that handles the request with SUB-HANDLER if the
+file name of the request is exactly the given PATH."
+  (lambda (request)
+    (maybe-handle (string= path (request-uri request))
+      (handle-request sub-handler request))))
+
 (defun test-handler ()
   (make-search-handler 
    (make-exact-path-handler "/form-test-params" 'form-test-params)

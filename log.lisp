@@ -86,15 +86,14 @@ facility."
 
 (defmethod  log-access ((logger stream-logger) request)
   (with-log-stream (stream (destination logger) (lock logger))
-    (format stream "~:[-~@[ (~A)~]~;~:*~A~@[ (~A)~]~] ~:[-~;~:*~A~] [~A] \"~A ~A~@[?~A~] ~
+    (format stream "~:[-~@[ (~A)~]~;~:*~A~@[ (~A)~]~] ~:[-~;~:*~A~] [~A] \"~A ~A ~
                     ~A\" ~D ~:[-~;~:*~D~] \"~:[-~;~:*~A~]\" \"~:[-~;~:*~A~]\"~%"
             (remote-addr request)
             (request-header :x-forwarded-for request)
             (authorization request)
             (iso-time)
             (request-method request)
-            (script-name request)
-            (query-string request)
+            (request-uri request)
             (server-protocol request)
             (status-code request)
             (content-length request)

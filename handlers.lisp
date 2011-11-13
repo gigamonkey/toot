@@ -60,77 +60,31 @@ directory names to index.html in that directory. If URI-PREFIX is
 supplied, it will strip that from the URI before mapping it to a
 file."
   (lambda (request)
-    (let ((script-name (url-decode (script-name request))))
-      (unless (safe-filename-p script-name)
+    (let ((path (url-decode (request-uri request))))
+      (when-let (? (position #\? path))
+        (setf path (subseq path 0 ?)))
+      (unless (safe-filename-p path)
         (abort-request-handler request +http-forbidden+))
-      (let ((file (resolve-file (enough-url script-name uri-prefix) document-root)))
+      (let ((file (resolve-file (enough-url path uri-prefix) document-root)))
         (serve-file request file)))))
 
-(defun safe-filename-p (script-name)
-  "Verify that a script-name, translated to a file doesn't contain any
-tricky bits such as '..'"
-  (let ((directory (pathname-directory (subseq script-name 1))))
+(defun safe-filename-p (path)
+  "Verify that a path, translated to a file doesn't contain any tricky
+bits such as '..'"
+  (let ((directory (pathname-directory (subseq path 1))))
     (or (stringp directory)
         (null directory)
         (and (consp directory)
              (eql (first directory) :relative)
              (every #'stringp (rest directory))))))
 
-(defun resolve-file (script-name document-root)
-  (merge-pathnames (subseq (add-index script-name) 1) document-root))
+(defun resolve-file (path document-root)
+  (merge-pathnames (subseq (add-index path) 1) document-root))
   
 (defun add-index (filename &key (extension "html"))
   (format nil "~a~@[index~*~@[.~a~]~]" filename (ends-with #\/ filename) extension))
 
-(defun make-prefix-handler (prefix sub-handler)
-  "Make a handler that handles the request with SUB-HANDLER if the
-file name of the request starts with the given prefix."
-  (lambda (request)
-    (let ((mismatch (mismatch (script-name request) prefix :test #'char=)))
-      (maybe-handle (or (null mismatch) (>= mismatch (length prefix)))
-        (handle-request sub-handler request)))))
 
-(defun make-prefix-directory-handler (uri-prefix document-root)
-  "Make a handler that handles URIs with a given prefix, serving them
-with files under a given DOCUMENT-ROOT after stripping the prefix from
-the URI."
-  (make-prefix-handler 
-   uri-prefix
-   (make-static-file-handler document-root (subseq uri-prefix 0 (1- (length uri-prefix))))))
-
-(defun make-regex-handler (regex sub-handler)
-  "Make a handler that handles the request with SUB-HANDLER if the
-file name of the request matches the CL-PPCRE regular expression
-REGEX."
-  (let ((scanner (create-scanner regex)))
-    (lambda (request)
-      (maybe-handle (scan scanner (script-name request))
-        (handle-request sub-handler request)))))
-
-(defun make-exact-path-handler (path sub-handler)
-  "Make a handler that handles the request with SUB-HANDLER if the
-file name of the request is exactly the given PATH."
-  (lambda (request)
-    (maybe-handle (string= path (script-name request))
-      (handle-request sub-handler request))))
-
-;;; Simple composite handler that searches a list of sub-handlers for
-;;; one that can handle the request.
-
-(defclass search-handler ()
-  ((handlers :initarg :handlers :initform () :accessor handlers)))
-
-(defun make-search-handler (&rest sub-handlers)
-  (make-instance 'search-handler :handlers sub-handlers))
-
-(defun add-handler (search-handler sub-handler)
-  (push sub-handler (handlers search-handler)))
-  
-(defmethod handle-request ((handler search-handler) request)
-  (loop for sub in (handlers handler)
-     for result = (handle-request sub request)
-     when (not (eql result 'not-handled)) return result
-     finally (return 'not-handled)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Error page generation

@@ -112,9 +112,7 @@ order to finish shutdown processing."
   (;; Information about the request itself
    (remote-addr :initarg :remote-addr :reader remote-addr) ; cgi REMOTE_ADDR
    (remote-port :initarg :remote-port :reader remote-port) ; cgi - weirdly missing
-   (script-name :initform nil :reader script-name) ; cgi SCRIPT_NAME
    (request-method :initarg :request-method :reader request-method) ; cgi REQUEST_METHOD
-   (query-string :initform nil :reader query-string) ; cgi QUERY_STRING
    (server-protocol :initarg :server-protocol :reader server-protocol) ; cgi SERVER_PROTOCOL
    (request-uri :initarg :request-uri :reader request-uri)
    (get-parameters :initform nil :reader get-parameters) 
@@ -143,27 +141,18 @@ order to finish shutdown processing."
 
 (defmethod initialize-instance :after ((request request) &key &allow-other-keys)
 
-  (with-slots (request-headers cookies-in get-parameters script-name query-string) request
+  (with-slots (get-parameters request-headers cookies-in) request
     (handler-case*
         (progn
-          (let* ((request-uri (request-uri request))
-                 (match-start (position #\? request-uri)))
-            (cond
-              (match-start
-               (setf script-name (subseq request-uri 0 match-start))
-               (setf query-string (subseq request-uri (1+ match-start))))
-              (t (setf script-name request-uri))))
-
-          ;; some clients (e.g. ASDF-INSTALL) send requests like
-          ;; "GET http://server/foo.html HTTP/1.0"...
-          (setf script-name (regex-replace "^https?://[^/]+" script-name ""))
-
           ;; compute GET parameters from query string and cookies from
           ;; the incoming 'Cookie' header
-          (setf get-parameters
-                (let ((*substitution-char* #\?))
-                  (form-url-encoded-list-to-alist (split "&" query-string))))
-
+          (let ((request-uri (request-uri request)))
+            (when-let (? (position #\? request-uri))
+              (setf get-parameters
+                    (let ((*substitution-char* #\?))
+                      (form-url-encoded-list-to-alist
+                       (split "&" (subseq request-uri (1+ ?))))))))
+          
           ;; The utf-8 decoding here is because we always encode the
           ;; values in outgoing cookies that way, i.e. by url-encoding
           ;; the values using the utf-8 encoding of characters that

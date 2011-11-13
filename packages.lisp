@@ -139,7 +139,6 @@
            :initialize-connection-stream
            :maybe-invoke-debugger
            :parameter-error
-           :query-string
            :real-remote-addr
            :reason-phrase
            :remote-addr
@@ -149,8 +148,6 @@
            :request-uri
            :require-authorization
            :status-code
-           :rfc-1123-date
-           :script-name
            :send-headers
            :server-protocol
            :shutdown
