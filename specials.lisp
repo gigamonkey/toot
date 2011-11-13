@@ -105,16 +105,6 @@ for cookie date format.")
   "The three-character names of the twelve months - needed for cookie
 date format.")
 
-(defvar *the-random-state* (make-random-state t)
-  "A fresh random state.")
-
-(defvar *file-upload-hook* nil
-  "If this is not NIL, it should be a unary function which will
-be called with a pathname for each file which is uploaded to
-Toot.  The pathname denotes the temporary file to which
-the uploaded file is written.  The hook is called directly before
-the file is created.")
-
 (defvar *default-content-type* "text/html"
   "The default content-type header which is returned to the client.
 If this is text content type, the character set used for encoding the
@@ -156,14 +146,6 @@ purposes.")
 (defvar *lisp-warnings-log-level* :warning
   "Log level for Lisp warnings.  Should be one of :ERROR, :WARNING
 \(the default), or :INFO.")
-
-(defvar *message-log-lock* (make-lock "global-message-log-lock")
-  "A global lock to prevent concurrent access to the log file used by
-the ACCEPTOR-LOG-MESSAGE function.")
-
-(defvar *access-log-lock* (make-lock "global-access-log-lock")
-  "A global lock to prevent concurrent access to the log file used by
-the ACCEPTOR-LOG-ACCESS function.")
 
 (defvar *catch-errors-p* t
   "Whether Toot should catch and log errors \(or rather invoke

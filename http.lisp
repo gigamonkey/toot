@@ -247,19 +247,16 @@ order to finish shutdown processing."
   "Accept connections on our listen socket and hand them back to the
 taskmaster via handle-incoming-connection. Called by taskmaster's
 execute-acceptor."
-  (usocket:with-server-socket (listener (listen-socket acceptor))
-    (loop
-       (when (shutdown-p acceptor) (return))
-
-       (when (usocket:wait-for-input listener :ready-only t :timeout +new-connection-wait-time+)
-         (when-let (client-connection
-                    (handler-case (usocket:socket-accept listener)                               
-                      ;; ignore condition
-                      (usocket:connection-aborted-error ())))
-           (set-timeouts client-connection
-                         (read-timeout acceptor)
-                         (write-timeout acceptor))
-           (handle-incoming-connection (taskmaster acceptor) acceptor client-connection))))))
+  (with-slots (listen-socket shutdown-p read-timeout write-timeout taskmaster) acceptor
+    (usocket:with-server-socket (listener listen-socket)
+      (loop until shutdown-p do
+           (when (usocket:wait-for-input listener :ready-only t :timeout +new-connection-wait-time+)
+             (when-let (connection
+                        (handler-case (usocket:socket-accept listener)                               
+                          ;; ignore condition
+                          (usocket:connection-aborted-error ())))
+               (set-timeouts connection read-timeout write-timeout)
+               (handle-incoming-connection taskmaster acceptor connection)))))))
 
 (defun process-connection (acceptor socket)
   "Actually process the connection accepted via accept connection.

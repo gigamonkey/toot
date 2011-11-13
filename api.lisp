@@ -144,8 +144,6 @@ Otherwise returns the value of REMOTE-ADDR as the only value."
                              (values (first addresses) addresses)))
           (t (remote-addr request)))))
 
-;; FIXME: the caller needs to know the charset of the file. Not sure
-;; if there's anything better to do.
 (defun serve-file (request pathname &optional content-type (charset *default-charset*))
   "Serve the file denoted by PATHNAME. Sends a content type header
 corresponding to CONTENT-TYPE or (if that is NIL) tries to determine
@@ -179,12 +177,12 @@ if-modified-since request appropriately."
           #+:clisp
           (setf (flexi-stream-element-type (content-stream (acceptor request))) 'octet)
           (loop until (zerop bytes-to-send) do
-             (let ((chunk-size (min +buffer-length+ bytes-to-send)))
-               (unless (eql chunk-size (read-sequence buf file :end chunk-size))
-                 (error "can't read from input file"))
-               (write-sequence buf out :end chunk-size)
-               (decf bytes-to-send chunk-size)))
-        (finish-output out)))))
+               (let ((chunk-size (min +buffer-length+ bytes-to-send)))
+                 (unless (eql chunk-size (read-sequence buf file :end chunk-size))
+                   (error "can't read from input file"))
+                 (write-sequence buf out :end chunk-size)
+                 (decf bytes-to-send chunk-size)))
+          (finish-output out))))))
 
 (defun no-cache (request)
   "Adds appropriate headers to completely prevent caching on most browsers."

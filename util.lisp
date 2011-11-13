@@ -93,13 +93,13 @@ according to HTTP/1.1 \(RFC 2068)."
   (with-output-to-string (out)
     (with-input-from-string (in string)
       (loop for char = (read-char in nil nil)
-            while char
-            unless (or (char< char #\Space)
-                       (char= char #\Rubout))
-              do (case char
-                   ((#\\) (write-string "\\\\" out))
-                   ((#\") (write-string "\\\"" out))
-                   (otherwise (write-char char out)))))))
+         while char
+         unless (or (char< char #\Space)
+                    (char= char #\Rubout))
+         do (case char
+              ((#\\) (write-string "\\\\" out))
+              ((#\") (write-string "\\\"" out))
+              (otherwise (write-char char out)))))))
 
 (defmacro upgrade-vector (vector new-type &key converter)
   "Returns a vector with the same length and the same elements as
