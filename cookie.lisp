@@ -53,4 +53,15 @@
      domain
      secure
      http-only)))
-  
+
+(defun http-token-p (token)
+  "Tests whether TOKEN is a string which is a valid 'token'
+according to HTTP/1.1 \(RFC 2068)."
+  (and (stringp token)
+       (plusp (length token))
+       (every (lambda (char)
+                (and ;; CHAR is US-ASCII but not control character or ESC
+                     (< 31 (char-code char) 127)
+                     ;; CHAR is not 'tspecial'
+                     (not (find char "()<>@,;:\\\"/[]?={} " :test #'char=))))
+              token)))

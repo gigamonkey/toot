@@ -1,4 +1,3 @@
-
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz. All rights reserved.
 
 ;;; Redistribution and use in source and binary forms, with or without
@@ -35,7 +34,7 @@
 (eval-when (:compile-toplevel :execute :load-toplevel)
   (defvar *http-reason-phrase-map* (make-hash-table)
     "Used to map numerical return codes to reason phrases.")
-  
+
   (defmacro def-http-status-code (name value reason-phrase)
     "Shortcut to define constants for return codes.  NAME is a
 Lisp symbol, VALUE is the numerical value of the return code, and
@@ -114,10 +113,6 @@ response will automatically be added to the content type in a
 (defvar *default-charset* :utf-8
   "The default charset for text/* content-types.")
 
-(defvar *methods-for-post-parameters* '(:post)
-  "A list of the request method types \(as keywords) for which
-Toot will try to compute POST-PARAMETERS.")
-
 (defvar *header-stream* nil
   "If this variable is not NIL, it should be bound to a stream to
 which incoming and outgoing headers will be written for debugging
@@ -189,10 +184,6 @@ encode cookie values.")
 (defvar *default-connection-timeout* 20
   "The default connection timeout used when an acceptor is reading
 from and writing to a socket stream.")
-
-(defvar *default-taskmaster-class* (if *supports-threads-p*
-                                       'thread-per-connection-taskmaster
-                                       'single-threaded-taskmaster))
 
 (defconstant +new-connection-wait-time+ 2
   "Time in seconds to wait for a new connection to arrive before

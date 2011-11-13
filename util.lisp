@@ -27,11 +27,6 @@
 
 (in-package :toot)
 
-(defun reason-phrase (status-code)
-  "Returns a reason phrase for the HTTP return code STATUS-CODE (which
-should be an integer) or NIL for return codes Toot doesn't know."
-  (gethash status-code *http-reason-phrase-map* "No reason phrase known"))
-
 (defun escape-for-html (string)
   "Escapes the characters #\\<, #\\>, #\\', #\\\", and #\\& for HTML output."
   (with-output-to-string (out)
@@ -45,18 +40,6 @@ should be an integer) or NIL for return codes Toot doesn't know."
                  ((#\') (write-string "&#039;" out))
                  ((#\&) (write-string "&amp;" out))
                  (otherwise (write-char char out)))))))
-
-(defun http-token-p (token)
-  "Tests whether TOKEN is a string which is a valid 'token'
-according to HTTP/1.1 \(RFC 2068)."
-  (and (stringp token)
-       (plusp (length token))
-       (every (lambda (char)
-                (and ;; CHAR is US-ASCII but not control character or ESC
-                     (< 31 (char-code char) 127)
-                     ;; CHAR is not 'tspecial'
-                     (not (find char "()<>@,;:\\\"/[]?={} " :test #'char=))))
-              token)))
 
 (defun rfc-1123-date (&optional (time (get-universal-time)))
   "Generates a time string according to RFC 1123.  Default is current time."
@@ -229,5 +212,3 @@ inclusion in HTML output."
               (escaped (or host (address (acceptor request))))
               (scan ":\\d+$" (or host ""))
               (port (acceptor request))))))
-
-

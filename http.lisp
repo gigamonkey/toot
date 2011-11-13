@@ -38,7 +38,7 @@ order to finish shutdown processing."
       `(let ((,lock (shutdown-lock ,acceptor)))
          (with-lock-held (,lock)
            (incf (requests-in-progress ,acceptor)))
-         (unwind-protect 
+         (unwind-protect
               (progn ,@body)
            (with-lock-held (,lock)
              (decf (requests-in-progress ,acceptor))
@@ -90,11 +90,11 @@ order to finish shutdown processing."
    (handler :initarg :handler :accessor handler)
    (error-generator :initarg :error-generator :accessor error-generator)
    (taskmaster :initarg :taskmaster :reader taskmaster)
-   (access-loggger 
+   (access-loggger
     :initarg :access-logger
     :initform (make-instance 'stream-logger :destination *error-output*)
     :accessor access-logger)
-   (message-logger 
+   (message-logger
     :initarg :message-logger
     :initform (make-instance 'stream-logger :destination *error-output*)
     :accessor message-logger)
@@ -111,7 +111,7 @@ order to finish shutdown processing."
     :port 80
     :name (format nil "Toot ~a" *toot-version*)
     :listen-backlog 50
-    :taskmaster (make-instance *default-taskmaster-class*)
+    :taskmaster (make-instance (if *supports-threads-p* 'thread-per-connection-taskmaster 'single-threaded-taskmaster))
     :persistent-connections-p t
     :read-timeout *default-connection-timeout*
     :write-timeout *default-connection-timeout*
@@ -129,7 +129,7 @@ order to finish shutdown processing."
    (request-method :initarg :request-method :reader request-method) ; cgi REQUEST_METHOD
    (server-protocol :initarg :server-protocol :reader server-protocol) ; cgi SERVER_PROTOCOL
    (request-uri :initarg :request-uri :reader request-uri)
-   (get-parameters :initform nil :reader get-parameters) 
+   (get-parameters :initform nil :reader get-parameters)
    (post-parameters :initform nil :reader post-parameters)
    (body-stream :initform nil :reader body-stream)
    (body-octets :initform nil :reader body-octets)
@@ -166,7 +166,7 @@ order to finish shutdown processing."
                     (let ((*substitution-char* #\?))
                       (form-url-encoded-list-to-alist
                        (split "&" (subseq request-uri (1+ ?))))))))
-          
+
           ;; The utf-8 decoding here is because we always encode the
           ;; values in outgoing cookies that way, i.e. by url-encoding
           ;; the values using the utf-8 encoding of characters that
@@ -208,9 +208,9 @@ order to finish shutdown processing."
 ;;; Start and stop the server
 
 (defun start-server (&key port (handler (error "Must specify handler.")))
-  (start (make-instance 'acceptor :port port :handler handler)))
+  (start-accepting (make-instance 'acceptor :port port :handler handler)))
 
-(defun start (acceptor)
+(defun start-accepting (acceptor)
   (when (listen-socket acceptor)
     (toot-error "acceptor ~A is already listening" acceptor))
 
@@ -224,7 +224,7 @@ order to finish shutdown processing."
   (execute-acceptor (taskmaster acceptor) acceptor)
   acceptor)
 
-(defun stop (acceptor &key soft)
+(defun stop-accepting (acceptor &key soft)
   (setf (shutdown-p acceptor) t)
   (shutdown (taskmaster acceptor) acceptor)
   (when soft
@@ -252,7 +252,7 @@ execute-acceptor."
       (loop until shutdown-p do
            (when (usocket:wait-for-input listener :ready-only t :timeout +new-connection-wait-time+)
              (when-let (connection
-                        (handler-case (usocket:socket-accept listener)                               
+                        (handler-case (usocket:socket-accept listener)
                           ;; ignore condition
                           (usocket:connection-aborted-error ())))
                (set-timeouts connection read-timeout write-timeout)
@@ -266,15 +266,15 @@ different thread than accept-connection is running in."
                   ;; abort if there's an error which isn't caught inside
                   (lambda (cond)
                     (maybe-invoke-debugger cond)
-                    (log-message 
+                    (log-message
                      acceptor
-                     *lisp-errors-log-level* 
+                     *lisp-errors-log-level*
                      "Error while processing connection: ~A" cond)
                     (return-from process-connection)))
                  (warning
                   ;; log all warnings which aren't caught inside
                   (lambda (cond)
-                    (log-message 
+                    (log-message
                      acceptor
                      *lisp-warnings-log-level*
                      "Warning while processing connection: ~A" cond))))
@@ -284,9 +284,9 @@ different thread than accept-connection is running in."
              ;; process requests until either the acceptor is shut
              ;; down, close-stream-p on the most recent request is T,
              ;; or the peer fails to send a request
-             (loop 
+             (loop
                 (when (shutdown-p acceptor) (return))
-                
+
                 (multiple-value-bind (request-headers request-method url-string protocol)
                     (read-request content-stream)
                   ;; check if there was a request at all
@@ -333,7 +333,7 @@ different thread than accept-connection is running in."
   ;; request (see START-OUTPUT)
   (catch 'request-processed
     (unwind-protect
-         (multiple-value-bind (body error backtrace) 
+         (multiple-value-bind (body error backtrace)
              ;; The handler can throw handler-done (by calling
              ;; abort-request-handler) to provide a body, error, and
              ;; backtrace after setting the HTTP status code.
@@ -341,7 +341,7 @@ different thread than accept-connection is running in."
              ;; write the body to the stream or return a string which
              ;; will be encoded and sent as the body of the reply.
              (catch 'handler-done
-               (handler-bind 
+               (handler-bind
                    ((error
                      (lambda (cond)
                        ;; if the headers were already sent, the error happened
@@ -369,7 +369,7 @@ different thread than accept-connection is running in."
            ;; return code.
            (unless (headers-sent-p request)
              (handler-case
-                 (with-debugger 
+                 (with-debugger
                    (send-response request (or body (error-body request))))
                (error (e)
                  ;; error occured while writing to the client. attempt to report.
@@ -390,14 +390,14 @@ different thread than accept-connection is running in."
 (defun setup-ssl-stream (adapter stream)
   ;; attach SSL to the stream if necessary
   (with-slots (certificate-file private-key-file private-key-password) adapter
-    (cl+ssl:make-ssl-server-stream 
+    (cl+ssl:make-ssl-server-stream
      stream
      :certificate certificate-file
      :key private-key-file
      :password private-key-password)))
 
 (defun unchunked-stream (stream)
-  (cond 
+  (cond
     ((typep stream 'chunked-stream)
      ;; Setting these flushes the output stream and checks if there's
      ;; unread input which would be an error.
@@ -415,8 +415,8 @@ different thread than accept-connection is running in."
      error
      (and *log-lisp-backtraces-p* backtrace)))
   (setf (status-code request) +http-internal-server-error+)
-  (send-response 
-   request 
+  (send-response
+   request
    (error-body request :error error :backtrace backtrace)
    :content-type "text/html"
    :charset :utf-8))
@@ -530,14 +530,14 @@ notation."
     (log-message request :warning "Can't read request body because there's ~
 no Content-Length header and input chunking is off.")
     (return-from read-post-parameters nil))
-  
+
   (handler-case*
       (multiple-value-bind (type subtype charset)
           (parse-content-type-header (request-header :content-type request))
-     
+
         (let ((external-format (charset-to-external-format charset)))
 
-          (cond 
+          (cond
             ((and (string-equal type "application") (string-equal subtype "x-www-form-urlencoded"))
              (parse-application/x-www-form-urlencoded request external-format))
 
@@ -693,7 +693,7 @@ returned."
 
 ;; FIXME: probably should send HTTP/1.0 if the request was.
 (defun send-bad-request-response (stream &optional additional-info)
-  (write-simple-response 
+  (write-simple-response
    (make-header-stream stream)
    +http-bad-request+
    '((:connection . "close"))
@@ -781,9 +781,9 @@ encoded to the steam as octets."
            (chunkedp (and http/1.1-p (not (content-length request)))))
 
       (when chunkedp (set-header :transfer-encoding "chunked"))
-    
+
       (multiple-value-bind (keep-alive-p keep-alive-requested-p) (keep-alive-p request)
-        (cond 
+        (cond
           ((and keep-alive-p (or chunkedp (length-known-p request)))
            (setf (close-stream-p request) nil)
            (let ((read-timeout (read-timeout (acceptor request))))
@@ -798,7 +798,7 @@ encoded to the steam as octets."
                ;; regardless of the read-timeout and only set this
                ;; header if there's a timeout.
                (set-header :keep-alive (format nil "timeout=~D" read-timeout)))))
-          (t 
+          (t
            ;; If we aren't doing keep-alive then we need to tell the
            ;; client we're going to close the connection after sending
            ;; the reply.
@@ -892,3 +892,8 @@ in HTTP/1.1.)"
                   (escape-for-html (princ-to-string error))
                   (when (and backtrace *show-lisp-backtraces-p*)
                     (escape-for-html (princ-to-string backtrace))))))))
+
+(defun reason-phrase (status-code)
+  "Returns a reason phrase for the HTTP return code STATUS-CODE (which
+should be an integer) or NIL for return codes Toot doesn't know."
+  (gethash status-code *http-reason-phrase-map* "No reason phrase known"))

@@ -107,7 +107,7 @@ specialize it on specific condition classes for debugging purposes.")
 (defmacro ignore-errors* (&body body)
   "Like IGNORE-ERRORS, but observes *CATCH-ERRORS-P*."
   `(ignore-errors (with-debugger ,@body)))
-       
+
 (defmacro handler-case* (expression &rest clauses)
   "Like HANDLER-CASE, but observes *CATCH-ERRORS-P*."
   `(handler-case (with-debugger ,expression)

@@ -210,7 +210,7 @@ port for the new protocol. CODE must be a 3xx redirection code and
 will be sent as status code."
   (check-type code (integer 300 399))
   (let ((url
-         (if (starts-with-scheme-p target) 
+         (if (starts-with-scheme-p target)
              target
              (let* ((requested-host (request-header :host request))
                     (current-protocol (if (ssl-config (acceptor request)) :https :http)))

@@ -31,130 +31,137 @@
   (:shadow :defconstant)
   ;; see asdf system definition
   (:import-from :toot-asd :*toot-version*)
-  (:export :*catch-errors-p*
-           :*default-connection-timeout*
-           :*default-content-type*
-           :*file-upload-hook*
-           :*header-stream*
-           :*default-external-format*
-           :*lisp-errors-log-level*
-           :*lisp-warnings-log-level*
-           :*log-lisp-backtraces-p*
-           :*log-lisp-errors-p*
-           :*log-lisp-warnings-p*
-           :*methods-for-post-parameters*
-           :*show-lisp-backtraces-p*
-           :*show-lisp-errors-p*
-           :*tmp-directory*
+  (:export
 
-           ;; HTTP status codes
-           :+http-accepted+
-           :+http-authorization-required+
-           :+http-bad-gateway+
-           :+http-bad-request+
-           :+http-conflict+
-           :+http-continue+
-           :+http-created+
-           :+http-expectation-failed+
-           :+http-failed-dependency+
-           :+http-forbidden+
-           :+http-gateway-time-out+
-           :+http-gone+
-           :+http-internal-server-error+
-           :+http-length-required+
-           :+http-method-not-allowed+
-           :+http-moved-permanently+
-           :+http-moved-temporarily+
-           :+http-multi-status+
-           :+http-multiple-choices+
-           :+http-no-content+
-           :+http-non-authoritative-information+
-           :+http-not-acceptable+
-           :+http-not-found+
-           :+http-not-implemented+
-           :+http-not-modified+
-           :+http-ok+
-           :+http-partial-content+
-           :+http-payment-required+
-           :+http-precondition-failed+
-           :+http-proxy-authentication-required+
-           :+http-request-entity-too-large+
-           :+http-request-time-out+
-           :+http-request-uri-too-large+
-           :+http-requested-range-not-satisfiable+
-           :+http-reset-content+
-           :+http-see-other+
-           :+http-service-unavailable+
-           :+http-switching-protocols+
-           :+http-temporary-redirect+
-           :+http-unsupported-media-type+
-           :+http-use-proxy+
-           :+http-version-not-supported+
+   ;; Starting and stopping acceptor
+   :start-server
+   :start-accepting
+   :stop-accepting
 
-           ;; Customizable and configurable parts of acceptor
-           :port
-           :address
-           :name 
-           :persistent-connections-p
-           :read-timeout
-           :write-timeout
-           
-           :handler
-           :error-generator
-           :taskmaster
-           :access-logger
-           :message-logger
+   ;; Configurable parts of acceptor
+   :port
+   :address
+   :name
+   :persistent-connections-p
+   :read-timeout
+   :write-timeout
+   :ssl-config
 
-           ;; Functions to use in handlers
-           :abort-request-handler
-           :authorization
-           :no-cache
-           :redirect
-           :handle-if-modified-since
+   ;; Pluggable parts of acceptor
+   :handler
+   :error-generator
+   :taskmaster
+   :access-logger
+   :message-logger
 
-           ;; Query the request
-           :get-parameter
-           :post-parameter
-           :post-parameters
-           :body-octets
-           :body-stream
-           :parameter
-           :cookie-value
-           :set-cookie
+   ;; To use in handlers
+   :abort-request-handler
+   :authorization
+   :no-cache
+   :redirect
+   :handle-if-modified-since
+   :require-authorization
+   :not-handled
+   :maybe-handle
 
-           :content-length
-           :content-type
+   ;; Query the request
+   :post-parameters
+   :body-octets
+   :body-stream
+   :get-parameter
+   :post-parameter
+   :parameter
+   :cookie-value
+   :request-header
+   :remote-addr
+   :remote-port
+   :request-method
+   :real-remote-addr
+   :request-uri
+   :server-protocol
 
-           :not-handled
-           :maybe-handle
+   ;; Control the response
+   :send-headers
+   :content-length
+   :content-type
+   :response-header
+   :set-cookie
+   :status-code
 
-           :escape-for-html
-           :serve-file
-           :request-header
-           :response-header
-           :http-token-p
-           :toot-condition
-           :toot-error
-           :toot-warning
-           :maybe-invoke-debugger
-           :parameter-error
-           :real-remote-addr
-           :reason-phrase
-           :remote-addr
-           :remote-port
-           :request
-           :request-method
-           :request-uri
-           :require-authorization
-           :status-code
-           :send-headers
-           :server-protocol
-           :shutdown
-           :start-server
-           :start
-           :stop
-           :single-threaded-taskmaster
-           :thread-per-connection-taskmaster
-           :url-decode
-           :url-encode
-           :safe-filename-p))
+   ;; Utilities
+   :escape-for-html
+   :serve-file
+   :url-decode
+   :url-encode
+   :safe-filename-p
+   :reason-phrase
+
+   ;; Conditions
+   :toot-condition
+   :toot-error
+   :toot-warning
+   :parameter-error
+
+   ;; Taskmaster API
+   :execute-acceptor
+   :handle-incoming-connection
+   :shutdown
+
+   ;; Special vars
+   :*catch-errors-p*
+   :*default-connection-timeout*
+   :*default-content-type*
+   :*default-external-format*
+   :*header-stream*
+   :*lisp-errors-log-level*
+   :*lisp-warnings-log-level*
+   :*log-lisp-backtraces-p*
+   :*log-lisp-errors-p*
+   :*log-lisp-warnings-p*
+   :*show-lisp-backtraces-p*
+   :*show-lisp-errors-p*
+   :*tmp-directory*
+
+   ;; HTTP status codes
+   :+http-accepted+
+   :+http-authorization-required+
+   :+http-bad-gateway+
+   :+http-bad-request+
+   :+http-conflict+
+   :+http-continue+
+   :+http-created+
+   :+http-expectation-failed+
+   :+http-failed-dependency+
+   :+http-forbidden+
+   :+http-gateway-time-out+
+   :+http-gone+
+   :+http-internal-server-error+
+   :+http-length-required+
+   :+http-method-not-allowed+
+   :+http-moved-permanently+
+   :+http-moved-temporarily+
+   :+http-multi-status+
+   :+http-multiple-choices+
+   :+http-no-content+
+   :+http-non-authoritative-information+
+   :+http-not-acceptable+
+   :+http-not-found+
+   :+http-not-implemented+
+   :+http-not-modified+
+   :+http-ok+
+   :+http-partial-content+
+   :+http-payment-required+
+   :+http-precondition-failed+
+   :+http-proxy-authentication-required+
+   :+http-request-entity-too-large+
+   :+http-request-time-out+
+   :+http-request-uri-too-large+
+   :+http-requested-range-not-satisfiable+
+   :+http-reset-content+
+   :+http-see-other+
+   :+http-service-unavailable+
+   :+http-switching-protocols+
+   :+http-temporary-redirect+
+   :+http-unsupported-media-type+
+   :+http-use-proxy+
+   :+http-version-not-supported+))

@@ -133,8 +133,8 @@ implementations."))
 
 (defmethod execute-acceptor ((taskmaster thread-per-connection-taskmaster) acceptor)
   (setf (acceptor-process taskmaster)
-        (make-thread 
-         (lambda () (accept-connections acceptor)) 
+        (make-thread
+         (lambda () (accept-connections acceptor))
          :name (listen-thread-name acceptor))))
 
 (defmethod handle-incoming-connection ((taskmaster thread-per-connection-taskmaster) acceptor socket)
@@ -156,19 +156,19 @@ implementations."))
      ;; Send HTTP 503 to indicate that we can't handle the request right now
      (log-message acceptor :warning "Can't handle a new request, too many request threads already")
      (send-service-unavailable-response acceptor socket))
-    
+
     ((and (taskmaster-max-accept-count taskmaster)
           (>= (taskmaster-request-count taskmaster) (taskmaster-max-thread-count taskmaster)))
      ;; Wait for a request to finish, then carry on
      (wait-for-free-connection taskmaster)
      (create-connection-handler-thread taskmaster acceptor socket))
-    
+
     (t
      (create-connection-handler-thread taskmaster acceptor socket))))
 
 (defmethod shutdown ((taskmaster thread-per-connection-taskmaster) acceptor)
   ;; just wait until the acceptor process has finished, then return
-  (loop  
+  (loop
    (unless (thread-alive-p (acceptor-process taskmaster))
      (return))
    (sleep 1))
@@ -214,7 +214,7 @@ implementations."))
     :name (connection-handler-thread-name taskmaster socket))
    (error (cond)
           ;; need to bind *ACCEPTOR* so that LOG-MESSAGE* can do its work.
-          (log-message 
+          (log-message
            acceptor *lisp-errors-log-level*
            "Error while creating worker thread for new incoming connection: ~A" cond))))
 
@@ -224,7 +224,7 @@ implementations."))
 (defun connection-handler-thread-name (taskmaster socket)
   (let ((address (usocket:get-peer-address socket))
         (port (usocket:get-peer-port socket)))
-    (format nil (taskmaster-worker-thread-name-format taskmaster) 
+    (format nil (taskmaster-worker-thread-name-format taskmaster)
             (cond
               ((and address port)
                (format nil "~A:~A" (usocket:vector-quad-to-dotted-quad address) port))
