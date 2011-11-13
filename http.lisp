@@ -81,15 +81,15 @@
     :accessor message-logger)
 
    ;; State
-   (listen-socket :initform nil :accessor listen-socket)
-   (shutdown-p :initform t :accessor shutdown-p)
+   (listen-socket        :initform nil :accessor listen-socket)
+   (shutdown-p           :initform t :accessor shutdown-p)
    (requests-in-progress :initform 0 :accessor requests-in-progress)
-   (shutdown-queue :initform (make-condition-variable) :accessor shutdown-queue)
-   (shutdown-lock :initform (make-lock "toot-shutdown") :accessor shutdown-lock))
+   (shutdown-queue       :initform (make-condition-variable) :accessor shutdown-queue)
+   (shutdown-lock        :initform (make-lock "toot-shutdown") :accessor shutdown-lock))
 
   (:default-initargs
     :address nil
-    :port 80
+    :port nil
     :name (format nil "Toot ~a" *toot-version*)
     :listen-backlog 50
     :taskmaster (make-instance (if *supports-threads-p* 'thread-per-connection-taskmaster 'single-threaded-taskmaster))
@@ -98,6 +98,11 @@
     :write-timeout *default-connection-timeout*
     :ssl-config nil
     :error-generator #'default-error-message-generator))
+
+(defmethod initialize-instance :after ((acceptor acceptor) &key &allow-other-keys)
+  (with-slots (port ssl-config) request
+    (unless port
+      (setf port (if ssl-config 443 80)))))
 
 (defmethod print-object ((acceptor acceptor) stream)
   (print-unreadable-object (acceptor stream :type t)
