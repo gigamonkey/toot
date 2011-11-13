@@ -28,12 +28,50 @@
 
 (defvar *test-acceptor* nil)
 
-(defun start-test-server (&key port)
-  (setf *test-acceptor* (make-instance 'acceptor :port port :handler (test-handler)))
-  (start *test-acceptor*))
+(defun test-document-directory (&optional sub-directory)
+  (asdf:system-relative-pathname :toot (format nil "www/~@[~A~]" sub-directory)))
+
+(defun start-test-server (port)
+  (setf *test-acceptor* (start-server :port port :handler (test-handler))))
 
 (defun reset-test-handler ()
   (setf (handler *test-acceptor*) (test-handler)))
+
+;;; FIXME: this is perhaps not as correct as it should be. For
+;;; instance, it may not work on windows beacuse of \ vs /. See the
+;;; old create-folder-dispatcher-and-handler to see if there's any
+;;; goodness that needs to be brought over.
+(defun make-static-file-handler (document-root &optional uri-prefix)
+  "Make a handler that maps the requested URI to a file under
+DOCUMENT-ROOT and serves it if it exists. Does a basic sanity check to
+dissalow requests for things like ../../../etc/passwd. Also maps
+directory names to index.html in that directory. If URI-PREFIX is
+supplied, it will strip that from the URI before mapping it to a
+file."
+  (lambda (request)
+    (let ((path (url-decode (request-uri request))))
+      (when-let (? (position #\? path))
+        (setf path (subseq path 0 ?)))
+      (unless (safe-filename-p path)
+        (abort-request-handler request +http-forbidden+))
+      (let ((file (resolve-file (enough-url path uri-prefix) document-root)))
+        (serve-file request file)))))
+
+(defun safe-filename-p (path)
+  "Verify that a path, translated to a file doesn't contain any tricky
+bits such as '..'"
+  (let ((directory (pathname-directory (subseq path 1))))
+    (or (stringp directory)
+        (null directory)
+        (and (consp directory)
+             (eql (first directory) :relative)
+             (every #'stringp (rest directory))))))
+
+(defun resolve-file (path document-root)
+  (merge-pathnames (subseq (add-index path) 1) document-root))
+  
+(defun add-index (filename &key (extension "html"))
+  (format nil "~a~@[index~*~@[.~a~]~]" filename (ends-with #\/ filename) extension))
 
 ;;; Simple composite handler that searches a list of sub-handlers for
 ;;; one that can handle the request.

@@ -46,16 +46,30 @@ order to finish shutdown processing."
                (condition-notify (shutdown-queue ,acceptor)))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Generic functions to be implemented by users to customize the
-;;; server. See handlers.lisp for some built in handlers and error
-;;; page generators.
+;;; Request handlers. New handlers can be defined by providing methods
+;;; on this generic function.
 
 (defgeneric handle-request (handler request)
   (:documentation "Used by the acceptor to handle a request."))
 
+(defmethod handle-request ((handler function) request)
+  (funcall handler request))
+
+(defmethod handle-request ((handler symbol) request)
+  (funcall handler request))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Error page generation.
+
 (defgeneric generate-error-page (generator request &key error backtrace)
   (:documentation "Used by acceptor to generate an error page for a
   request based on the http status code."))
+
+(defmethod generate-error-page ((generator function) request &key error backtrace)
+  (funcall generator request error backtrace))
+
+(defmethod generate-error-page ((generator symbol) request &key error backtrace)
+  (funcall generator request error backtrace))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Classes
@@ -193,7 +207,7 @@ order to finish shutdown processing."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Start and stop the server
 
-(defun start-server (&key port (handler (make-static-file-handler (test-document-directory))))
+(defun start-server (&key port (handler (error "Must specify handler.")))
   (start (make-instance 'acceptor :port port :handler handler)))
 
 (defun start (acceptor)
@@ -733,7 +747,10 @@ connection."
   "Send the response headers and return the stream to which the body
 of the response can be written. The stream is a binary stream. The
 public API function, SEND-HEADERS will wrap that stream in a
-flexi-stream based on the content-type and charset, if needed."
+flexi-stream based on the content-type and charset, if needed. Thus
+function is for functions that are going to take care of encoding the
+response themselves, such as SERVE-FILE, which just dumps an already
+encoded to the steam as octets."
   ;; Set content-length, content-type and external format if they're
   ;; supplied by caller. They could also have been set directly before
   ;; this function was called.
@@ -863,3 +880,18 @@ in HTTP/1.1.)"
              (write-line-crlf stream ""))
            (setf start (1+ end))
            (when (<= (length string) start) (return)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; A bare-bones error page generator
+
+(defun default-error-message-generator (request error backtrace)
+  "A function that generates a bare-bones error page to be used as an error page generator."
+  (let ((status-code (status-code request)))
+    (with-output-to-string (s)
+      (format s "<html><head><title>~d: ~a</title></head><body><h1>~2:*~d: ~a</h1></body></html>"
+              status-code (reason-phrase status-code))
+      (if (and error *show-lisp-errors-p*)
+          (format s "<pre>~a~@[~%~%Backtrace:~%~%~a~]</pre>"
+                  (escape-for-html (princ-to-string error))
+                  (when (and backtrace *show-lisp-backtraces-p*)
+                    (escape-for-html (princ-to-string backtrace))))))))

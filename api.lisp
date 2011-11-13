@@ -29,6 +29,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public API
 
+(defmacro maybe-handle (test &body body)
+  "Handle the request with BODY if TEST is true. Otherwise return
+'NOT-HANDLED."
+  `(cond
+     (,test ,@body)
+     (t 'not-handled)))
+
 (defun cookie-out (name request)
   "Returns the current value of the outgoing cookie named
 NAME. Search is case-sensitive."
@@ -79,7 +86,6 @@ is created."
 can be written. If the content-type is text/* type, the stream
 returned will be a character stream that will encode the response
 properly for the charset specified."
-
   (setf (status-code request) status-code)
   (let ((stream (send-response-headers request nil content-type charset)))
     (if (text-type-p content-type)
@@ -164,25 +170,21 @@ if-modified-since request appropriately."
     (with-open-file (file pathname :direction :input :element-type 'octet :if-does-not-exist nil)
       (let ((bytes-to-send (maybe-handle-range-header request file)))
         (setf (status-code request) +http-ok+)
-        (let ((out (send-response-headers request
-                                          bytes-to-send 
-                                          (or content-type (guess-mime-type (pathname-type pathname)))
-                                          charset))
-              (buf (make-array +buffer-length+ :element-type 'octet)))
+        (let* ((type (or content-type (guess-mime-type (pathname-type pathname))))
+               (out (send-response-headers request bytes-to-send  type charset))
+               (buf (make-array +buffer-length+ :element-type 'octet)))
           ;; FIXME: is this necessary? We shouldn't have a
           ;; flexi-stream at this point. In fact, this should probably
           ;; blow up because of that.
           #+:clisp
           (setf (flexi-stream-element-type (content-stream (acceptor request))) 'octet)
-          (loop
-             (when (zerop bytes-to-send)
-               (return))
+          (loop until (zerop bytes-to-send) do
              (let ((chunk-size (min +buffer-length+ bytes-to-send)))
                (unless (eql chunk-size (read-sequence buf file :end chunk-size))
                  (error "can't read from input file"))
                (write-sequence buf out :end chunk-size)
                (decf bytes-to-send chunk-size)))
-          (finish-output out))))))
+        (finish-output out)))))
 
 (defun no-cache (request)
   "Adds appropriate headers to completely prevent caching on most browsers."
@@ -252,9 +254,9 @@ TIME."
   "Returns the relative portion of URL relative to URL-PREFIX, similar
 to what ENOUGH-NAMESTRING does for pathnames."
   (let ((prefix-length (length url-prefix)))
-    (cond
-      ((string= url url-prefix :end1 prefix-length) (subseq url prefix-length))
-      (t url))))
+    (if (string= url url-prefix :end1 prefix-length)
+        (subseq url prefix-length)
+        url)))
 
 (defun cookie-value (name request)
   "Get the value of the cookie with the given name sent by the client
@@ -289,30 +291,29 @@ or NIL if no such cookie was sent."
   reported to the client with a HTTP 416 status code."
   (let ((bytes-available (file-length file)))
     (or
-     (cl-ppcre:register-groups-bind (start end)
-        ("^bytes (\\d+)-(\\d+)$" (request-header :range request) :sharedp t)
-      ;; body won't be executed if regular expression does not match
-      (setf start (parse-integer start))
-      (setf end (parse-integer end))
-      (when (or (< start 0) (>= end bytes-available))
-        (setf (response-header :content-range request) (format nil "bytes 0-~D/*" (1- bytes-available)))
-        (abort-request-handler request +http-requested-range-not-satisfiable+
-                               (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
-                                       start end (1- bytes-available))))
-      (file-position file start)
-      (setf (status-code request) +http-partial-content+)
-      (setf (response-header :content-range request) (format nil "bytes ~D-~D/*" start end))
-      (1+ (- end start)))
+     (register-groups-bind (start end)
+         ("^bytes (\\d+)-(\\d+)$" (request-header :range request) :sharedp t)
+       ;; body won't be executed if regular expression does not match
+       (setf start (parse-integer start))
+       (setf end (parse-integer end))
+       (when (or (< start 0) (>= end bytes-available))
+         (setf (response-header :content-range request) (format nil "bytes 0-~D/*" (1- bytes-available)))
+         (abort-request-handler request +http-requested-range-not-satisfiable+
+                                (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
+                                        start end (1- bytes-available))))
+       (file-position file start)
+       (setf (status-code request) +http-partial-content+)
+       (setf (response-header :content-range request) (format nil "bytes ~D-~D/*" start end))
+       (1+ (- end start)))
      bytes-available)))
 
 (defun starts-with-scheme-p (string)
   "Checks whether the string STRING represents a URL which starts with
 a scheme, i.e. something like 'https://' or 'mailto:'."
   (loop with scheme-char-seen-p = nil
-        for c across string
-        when (or (char-not-greaterp #\a c #\z)
-                 (digit-char-p c)
-                 (member c '(#\+ #\- #\.) :test #'char=))
-        do (setq scheme-char-seen-p t)
-        else return (and scheme-char-seen-p
-                         (char= c #\:))))
+     for c across string
+     when (or (char-not-greaterp #\a c #\z)
+              (digit-char-p c)
+              (member c '(#\+ #\- #\.) :test #'char=))
+     do (setq scheme-char-seen-p t)
+     else return (and scheme-char-seen-p (char= c #\:))))
