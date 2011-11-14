@@ -1,9 +1,18 @@
+<!DOCTYPE html>
 <html>
   <head>
     <title>Form testing</title>
   </head>
   <body>
     <h1>Form testing</h1>
+
+    <h2>Form test params (<code>GET</code>)</h2>
+    <form action='/form-test-get-params' method='GET'>
+      <p>Foo: <input type='text' name='foo' value='Foo 清慧'></p>
+      <p>Bar: <input type='text' name='bar' value='Bar'></p>
+      <p>Baz: <input type='text' name='baz' value='Baz'></p>
+      <p><input type='submit' value='Submit'> <input type='reset' value='Reset'></p>
+    </form>
 
     <h2>Form test params (<code>application/x-www-form-urlencoded</code>)</h2>
     <form action='/form-test-params' method='POST' enctype='application/x-www-form-urlencoded'>

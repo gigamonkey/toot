@@ -106,15 +106,36 @@ file name of the request is exactly the given PATH."
 
 (defun test-handler ()
   (make-search-handler
+   (make-exact-path-handler "/form-test-get-params" 'form-test-get-params)
    (make-exact-path-handler "/form-test-params" 'form-test-params)
    (make-exact-path-handler "/form-test-octets" 'form-test-octets)
    (make-exact-path-handler "/form-test-stream" 'form-test-stream)
    (make-static-file-handler (test-document-directory))))
 
+(defun form-test-get-params (request)
+  (with-output-to-string (s)
+    (format s "~&<html><head><title>Form test params</title></head><body>")
+    (format s "~&<h1>Form results via <code>GET</code></h1>")
+    (loop for (k . v) in (request-headers request) do
+         (format s "~&<p><code>~a: ~a</code></p>" k v))
+    (loop for (k . v) in (get-parameters request)
+       do
+         (cond
+           ((listp v)
+            (format s "~&<p>~a: ~a</p><p><pre>" k v)
+            (with-open-file (in (first v))
+              (loop for char = (read-char in nil nil)
+                 while char do (write-string (escape-for-html (string char)) s)))
+            (format s "</pre></p>"))
+           (t (format s "~&<p>~a: ~a</p>" k v))))
+    (format s "~&</body></html>")))
+
 (defun form-test-params (request)
   (with-output-to-string (s)
     (format s "~&<html><head><title>Form test params</title></head><body>")
     (format s "~&<h1>Form results via <code>post-parameters</code></h1>")
+    (loop for (k . v) in (request-headers request) do
+         (format s "~&<p><code>~a: ~a</code></p>" k v))
     (loop for (k . v) in (post-parameters request)
        do
          (cond
