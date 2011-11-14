@@ -49,9 +49,7 @@ directory names to index.html in that directory. If URI-PREFIX is
 supplied, it will strip that from the URI before mapping it to a
 file."
   (lambda (request)
-    (let ((path (url-decode (request-uri request))))
-      (when-let (? (position #\? path))
-        (setf path (subseq path 0 ?)))
+    (let ((path (uri-path (request-uri request))))
       (unless (safe-filename-p path)
         (abort-request-handler request +http-forbidden+))
       (let ((file (resolve-file (enough-url path uri-prefix) document-root)))
@@ -103,7 +101,7 @@ bits such as '..'"
   "Make a handler that handles the request with SUB-HANDLER if the
 file name of the request is exactly the given PATH."
   (lambda (request)
-    (maybe-handle (string= path (request-uri request))
+    (maybe-handle (string= path (uri-path (request-uri request)))
       (handle-request sub-handler request))))
 
 (defun test-handler ()

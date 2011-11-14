@@ -49,7 +49,8 @@ output.")
                :md5
                :trivial-backtrace
                :usocket
-               :bordeaux-threads)
+               :bordeaux-threads
+               :puri)
   :components ((:file "packages")
                (:file "rfc2388")
                (:file "specials")

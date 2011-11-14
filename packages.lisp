@@ -27,7 +27,13 @@
 (in-package :cl-user)
 
 (defpackage :toot
-  (:use :cl :cl-ppcre :chunga :flexi-streams :bordeaux-threads :alexandria)
+  (:use :cl
+        :alexandria
+        :bordeaux-threads
+        :chunga
+        :cl-ppcre
+        :flexi-streams
+        :puri)
   (:shadow :defconstant)
   ;; see asdf system definition
   (:import-from :toot-asd :*toot-version*)

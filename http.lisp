@@ -141,34 +141,33 @@
 
 (defmethod initialize-instance :after ((request request) &key &allow-other-keys)
 
-  (with-slots (get-parameters request-headers cookies-in) request
+  (with-slots (get-parameters request-uri request-headers cookies-in) request
     (handler-case*
-        (progn
-          ;; compute GET parameters from query string and cookies from
-          ;; the incoming 'Cookie' header
-          (let ((request-uri (request-uri request)))
-            (when-let (? (position #\? request-uri))
-              (setf get-parameters
-                    (let ((*substitution-char* #\?))
-                      (form-url-encoded-list-to-alist
-                       (split "&" (subseq request-uri (1+ ?))))))))
-
-          ;; The utf-8 decoding here is because we always encode the
-          ;; values in outgoing cookies that way, i.e. by url-encoding
-          ;; the values using the utf-8 encoding of characters that
-          ;; need escaping. The comma is because that's how multiple
-          ;; Cookie headers will be joined and the semicolon is
-          ;; because that's how a single Cookie headers delimits the
-          ;; separate cookies.
-          (setf cookies-in
-                (form-url-encoded-list-to-alist
-                 (split "\\s*[,;]\\s*" (cdr (assoc :cookie request-headers)))
-                 +utf-8+)))
-
+        (setf
+         get-parameters (parse-query-string request-uri)
+         cookies-in (parse-cookies request-headers))
       (error (condition)
         (log-message request :error "Error when creating REQUEST object: ~A" condition)
         ;; we assume it's not our fault...
         (setf (status-code request) +http-bad-request+)))))
+
+(defun parse-query-string (request-uri)
+  ;; FIXME: This *supports-char* thing seems hinky to
+  ;; me. Is this really the best we can do.?
+  (let ((*substitution-char* #\?))
+    (form-url-encoded-list-to-alist
+     (split "&" (uri-query request-uri)))))
+
+(defun parse-cookies (request-headers)
+  ;; The utf-8 decoding here is because we always encode the values in
+  ;; outgoing cookies that way, i.e. by url-encoding the values using
+  ;; the utf-8 encoding of characters that need escaping. The comma is
+  ;; because that's how multiple Cookie headers will be joined and the
+  ;; semicolon is because that's how a single Cookie headers delimits
+  ;; the separate cookies.
+  (form-url-encoded-list-to-alist
+   (split "\\s*[,;]\\s*" (cdr (assoc :cookie request-headers)))
+   +utf-8+))
 
 (defclass ssl-config ()
   ((certificate-file :initarg :certificate-file :reader certificate-file)
@@ -262,7 +261,7 @@ different thread than accept-connection is running in."
                                          :request-headers request-headers
                                          :content-stream content-stream
                                          :request-method request-method
-                                         :request-uri url-string
+                                         :request-uri (parse-uri url-string)
                                          :server-protocol protocol)))
                           (with-lock-held (lock) (incf (requests-in-progress acceptor)))
                           (unwind-protect
