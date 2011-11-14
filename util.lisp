@@ -212,3 +212,6 @@ inclusion in HTML output."
               (escaped (or host (address (acceptor request))))
               (scan ":\\d+$" (or host ""))
               (port (acceptor request))))))
+
+(defun sans (args &rest to-remove)
+  (loop for (k v) on args by #'cddr unless (member k to-remove) collect k and collect v))
