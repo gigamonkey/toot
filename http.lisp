@@ -97,7 +97,7 @@
     :read-timeout *default-connection-timeout*
     :write-timeout *default-connection-timeout*
     :ssl-config nil
-    :error-generator #'default-error-message-generator))
+    :error-generator 'default-error-message-generator))
 
 (defmethod initialize-instance :after ((acceptor acceptor) &key &allow-other-keys)
   (with-slots (port ssl-config) acceptor
@@ -830,11 +830,31 @@ in HTTP/1.1.)"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; A bare-bones error page generator
 
+(defparameter *error-css* "
+body {
+  font-family: \"Gill Sans\", sans-serif;
+  width: 600px;
+  margin: 1in auto;
+
+}
+
+h1 { font-size: 64px; }
+
+div {
+  text-align: center;
+  background: #ddddff;
+  padding: 10px;
+  border: thin solid black;
+  height: 300px;
+}
+")
+
 (defun default-error-message-generator (request error backtrace)
   "A function that generates a bare-bones error page to be used as an error page generator."
   (let ((status-code (status-code request)))
     (with-output-to-string (s)
-      (format s "<html><head><title>~d: ~a</title></head><body><h1>~2:*~d: ~a</h1></body></html>"
+      (format s "~&<html><head><style type='text/css'>~a</style><title>~d: ~a</title></head><body><div><h1>~2:*~d: ~a</h1>"
+              *error-css*
               status-code (reason-phrase status-code))
       (when (and error *show-lisp-errors-p*)
         (format s "<pre>~a~@[~%~%Backtrace:~%~%~a~]</pre>"
@@ -842,19 +862,9 @@ in HTTP/1.1.)"
                   (when (and backtrace *show-lisp-backtraces-p*)
                     (escape-for-html (princ-to-string backtrace)))))
 
-      (format s "~&<hr>~a" (address-string request)))))
-
-(defun reason-phrase (status-code)
-  "Returns a reason phrase for the HTTP return code STATUS-CODE (which
-should be an integer) or NIL for return codes Toot doesn't know."
-  (gethash status-code *http-reason-phrase-map* "No reason phrase known"))
-
-(defun address-string (request)
-  "Returns a string with information about Toot suitable for
-inclusion in HTML output."
-  (flet ((escaped (arg) (and arg (escape-for-html arg))))
-    (let ((host (request-header :host request)))
-      (format nil "<address><a href='~a'>Toot ~a</a> <a href='~A'>(~A ~A)</a>~@[ at ~A~:[ (port ~D)~;~]~]</address>"
+      (flet ((escaped (arg) (and arg (escape-for-html arg))))
+        (let ((host (request-header :host request)))
+          (format s "<address><a href='~a'>Toot ~a</a> running on <a href='~A'>(~A ~A)</a>~@[ at ~A~:[ (port ~D)~;~]~]</address>"
               +toot-project-url+
               *toot-version*
               +implementation-link+
@@ -862,5 +872,13 @@ inclusion in HTML output."
               (escaped (lisp-implementation-version))
               (escaped (or host (address (acceptor request))))
               (scan ":\\d+$" (or host ""))
-              (port (acceptor request))))))
+              (port (acceptor request)))))
+
+
+      (format s "~&</div></body></html>"))))
+
+(defun reason-phrase (status-code)
+  "Returns a reason phrase for the HTTP return code STATUS-CODE (which
+should be an integer) or NIL for return codes Toot doesn't know."
+  (gethash status-code *http-reason-phrase-map* "No reason phrase known"))
 
