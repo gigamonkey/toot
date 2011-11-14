@@ -90,9 +90,9 @@ NAME should be a keyword or a string."
   (cdr (assoc name (response-headers request))))
 
 (defun (setf response-header) (new-value name request)
-  "Changes the current value of the outgoing http header named NAME
-(a keyword or a string). If a header with this name doesn't exist, it
-is created."
+  "Changes the current value of the outgoing http header named NAME (a
+keyword or a string). If a header with this name doesn't exist, it is
+created."
   (when (headers-sent-p request)
     (error "Can't set reply headers after headers have been sent."))
 
@@ -128,7 +128,8 @@ is created."
   "Send the headers and return a stream to which the body of the reply
 can be written. If the content-type is text/* type, the stream
 returned will be a character stream that will encode the response
-properly for the charset specified."
+properly for the charset specified. If the request was a HEAD request
+we dynamically abort rather than returning a stream."
   (setf (status-code request) status-code)
   (let ((stream (send-response-headers request nil content-type charset)))
     (if (text-type-p content-type)
