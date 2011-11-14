@@ -1,4 +1,3 @@
-
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz.  All rights reserved.
 
 ;;; Redistribution and use in source and binary forms, with or without
@@ -168,10 +167,7 @@ implementations."))
 
 (defmethod shutdown ((taskmaster thread-per-connection-taskmaster) acceptor)
   ;; just wait until the acceptor process has finished, then return
-  (loop
-   (unless (thread-alive-p (acceptor-process taskmaster))
-     (return))
-   (sleep 1))
+  (loop while (thread-alive-p (acceptor-process taskmaster)) do (sleep 1))
   taskmaster)
 
 (defun increment-taskmaster-request-count (taskmaster)
@@ -186,9 +182,9 @@ implementations."))
           (decf (taskmaster-request-count taskmaster)))
       (when (and (taskmaster-max-accept-count taskmaster)
                  (< (taskmaster-request-count taskmaster) (taskmaster-max-accept-count taskmaster)))
-        (note-free-connection taskmaster)))))
+        (notify-free-connection taskmaster)))))
 
-(defun note-free-connection (taskmaster)
+(defun notify-free-connection (taskmaster)
   (with-lock-held ((taskmaster-wait-lock taskmaster))
     (condition-notify (taskmaster-wait-queue taskmaster))))
 
