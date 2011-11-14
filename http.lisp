@@ -285,9 +285,10 @@ different thread than accept-connection is running in."
 
 (defun process-request (request)
   "Process a single request. Called repeatedly by process-connection."
-  ;; used by HTTP HEAD handling to end request processing in a HEAD
-  ;; request (see START-OUTPUT)
-  (catch 'request-processed
+
+  ;; SEND-RESPONSE-HEADERS will throw this after the headers are
+  ;; written if the request was a HEAD request.
+  (catch 'head-request
     (unwind-protect
          (multiple-value-bind (body error backtrace)
              ;; The handler can throw handler-done (by calling
@@ -324,16 +325,14 @@ different thread than accept-connection is running in."
            ;; is none, an error message we generated based on the
            ;; return code.
            (unless (headers-sent-p request)
-             (handler-case
-                 (with-debugger
-                   (send-response request (or body (error-body request))))
+             (handler-case*
+                 (send-response request (or body (error-body request)))
                (error (e)
                  ;; error occured while writing to the client. attempt to report.
                  (report-error-to-client request e)))))
 
-      (when-let (stream (slot-value request 'body-stream))
-        (loop for char = (read-byte stream nil nil) while char))
-
+      (finish-output (content-stream request))
+      (drain-body-stream request)
       (delete-tmp-files request))))
 
 (defun make-socket-stream (socket acceptor)
@@ -380,6 +379,10 @@ different thread than accept-connection is running in."
 (defun error-body (request &key error backtrace)
   (let ((generator (error-generator (acceptor request))))
     (generate-error-page generator request :error error :backtrace backtrace)))
+
+(defun drain-body-stream (request)
+  (when-let (stream (slot-value request 'body-stream))
+    (loop for char = (read-byte stream nil nil) while char)))
 
 (defun delete-tmp-files (request)
   (dolist (path (tmp-files request))
@@ -683,8 +686,7 @@ connection."
   (let ((stream (content-stream request))
         (encoded (string-to-octets content :external-format charset)))
     (send-response-headers request (length encoded) content-type charset)
-    (unless (eql (request-method request) :head) (write-sequence encoded stream))
-    (finish-output stream)))
+    (write-sequence encoded stream)))
 
 (defun send-response-headers (request content-length content-type charset)
   "Send the response headers and return the stream to which the body
@@ -693,7 +695,8 @@ public API function, SEND-HEADERS will wrap that stream in a
 flexi-stream based on the content-type and charset, if needed. Thus
 function is for functions that are going to take care of encoding the
 response themselves, such as SERVE-FILE, which just dumps an already
-encoded to the steam as octets."
+encoded to the steam as octets. If the request was a HEAD request we
+dynamically abort rather than returning a stream."
   ;; Set content-length, content-type and external format if they're
   ;; supplied by caller. They could also have been set directly before
   ;; this function was called.
@@ -710,7 +713,7 @@ encoded to the steam as octets."
       (write-cookies header-stream (cookies-out request))
       (write-line-crlf header-stream ""))
     (setf (headers-sent-p request) t)
-    stream))
+    (if (eql (request-method request) :head) (throw 'head-request) stream)))
 
 (defun finalize-response-headers (request)
   "Set certain headers automatically based on values in the request object."
