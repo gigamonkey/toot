@@ -1,5 +1,7 @@
 ;;;; Copyright (c) 2003 Janis Dzerins
 ;;;; Modifications for TBNL Copyright (c) 2004 Michael Weber and Dr. Edmund Weitz
+;;;; Further modifications for Toot Copyright (c) 2011, Peter Seibel. All rights reserved.
+
 ;;;;
 ;;;; Redistribution and use in source and binary forms, with or
 ;;;; without modification, are permitted provided that the following

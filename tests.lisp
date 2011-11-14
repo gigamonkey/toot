@@ -1,3 +1,4 @@
+;;; Copyright (c) 2004-2010, Dr. Edmund Weitz. All rights reserved.
 ;;; Copyright (c) 2011, Peter Seibel.  All rights reserved.
 
 ;;; Redistribution and use in source and binary forms, with or without
@@ -165,6 +166,3 @@ file name of the request is exactly the given PATH."
        while char do (write-string (escape-for-html (string char)) s))
     (format s "</pre></p>")
     (format s "~&</body></html>")))
-
-
-

@@ -1,5 +1,5 @@
-
 ;;; Copyright (c) 2004-2010, Dr. Edmund Weitz. All rights reserved.
+;;; Copyright (c) 2011, Peter Seibel. All rights reserved.
 
 ;;; Redistribution and use in source and binary forms, with or without
 ;;; modification, are permitted provided that the following conditions
