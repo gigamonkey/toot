@@ -39,6 +39,9 @@
   (:import-from :toot-asd :*toot-version*)
   (:export
 
+   :acceptor
+   :stream-logger
+
    ;; Starting and stopping acceptor
    :start-server
    :start-acceptor
@@ -61,12 +64,12 @@
    :taskmaster
 
    ;; To use in handlers
+   :serve-file
    :abort-request-handler
    :no-cache
    :redirect
    :handle-if-modified-since
    :require-authorization
-   :authorization
    :not-handled
    :maybe-handle
 
@@ -78,6 +81,7 @@
    :remote-addr
    :remote-port
    :real-remote-addr
+   :authorization
 
    ;; Three ways to get at the body of the request
    :post-parameters
@@ -102,10 +106,8 @@
 
    ;; Utilities
    :escape-for-html
-   :serve-file
    :url-decode
    :url-encode
-   :safe-filename-p
    :reason-phrase
 
    ;; Conditions
