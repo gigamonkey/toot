@@ -198,20 +198,5 @@ to be the corresponding header value as a string."
                charset)))
        (values type subtype charset)))))
 
-(defun address-string (request)
-  "Returns a string with information about Toot suitable for
-inclusion in HTML output."
-  (flet ((escaped (arg) (and arg (escape-for-html arg))))
-
-    (let ((host (request-header :host request)))
-      (format nil "<address><a href='http://www.gigamonkeys.com/toot/'>Toot ~A</a> <a href='~A'>(~A ~A)</a>~@[ at ~A~:[ (port ~D)~;~]~]</address>"
-              *toot-version*
-              +implementation-link+
-              (escaped (lisp-implementation-type))
-              (escaped (lisp-implementation-version))
-              (escaped (or host (address (acceptor request))))
-              (scan ":\\d+$" (or host ""))
-              (port (acceptor request))))))
-
 (defun sans (args &rest to-remove)
   (loop for (k v) on args by #'cddr unless (member k to-remove) collect k and collect v))

@@ -146,6 +146,8 @@ purposes.")
   "Whether Toot should catch and log errors \(or rather invoke
 the debugger).")
 
+(defconstant +toot-project-url+ "https://github.com/gigamonkey/toot")
+
 (defconstant +implementation-link+
   #+:cmu "http://www.cons.org/cmucl/"
   #+:sbcl "http://www.sbcl.org/"

@@ -713,7 +713,7 @@ dynamically abort rather than returning a stream."
       (write-cookies header-stream (cookies-out request))
       (write-line-crlf header-stream ""))
     (setf (headers-sent-p request) t)
-    (if (eql (request-method request) :head) (throw 'head-request) stream)))
+    (if (eql (request-method request) :head) (throw 'head-request nil) stream)))
 
 (defun finalize-response-headers (request)
   "Set certain headers automatically based on values in the request object."
@@ -836,13 +836,31 @@ in HTTP/1.1.)"
     (with-output-to-string (s)
       (format s "<html><head><title>~d: ~a</title></head><body><h1>~2:*~d: ~a</h1></body></html>"
               status-code (reason-phrase status-code))
-      (if (and error *show-lisp-errors-p*)
-          (format s "<pre>~a~@[~%~%Backtrace:~%~%~a~]</pre>"
+      (when (and error *show-lisp-errors-p*)
+        (format s "<pre>~a~@[~%~%Backtrace:~%~%~a~]</pre>"
                   (escape-for-html (princ-to-string error))
                   (when (and backtrace *show-lisp-backtraces-p*)
-                    (escape-for-html (princ-to-string backtrace))))))))
+                    (escape-for-html (princ-to-string backtrace)))))
+
+      (format s "~&<hr>~a" (address-string request)))))
 
 (defun reason-phrase (status-code)
   "Returns a reason phrase for the HTTP return code STATUS-CODE (which
 should be an integer) or NIL for return codes Toot doesn't know."
   (gethash status-code *http-reason-phrase-map* "No reason phrase known"))
+
+(defun address-string (request)
+  "Returns a string with information about Toot suitable for
+inclusion in HTML output."
+  (flet ((escaped (arg) (and arg (escape-for-html arg))))
+    (let ((host (request-header :host request)))
+      (format nil "<address><a href='~a'>Toot ~a</a> <a href='~A'>(~A ~A)</a>~@[ at ~A~:[ (port ~D)~;~]~]</address>"
+              +toot-project-url+
+              *toot-version*
+              +implementation-link+
+              (escaped (lisp-implementation-type))
+              (escaped (lisp-implementation-version))
+              (escaped (or host (address (acceptor request))))
+              (scan ":\\d+$" (or host ""))
+              (port (acceptor request))))))
+
