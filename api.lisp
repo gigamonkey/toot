@@ -291,14 +291,6 @@ TIME."
       (abort-request-handler request +http-not-modified+))
     (values)))
 
-(defun enough-url (url url-prefix)
-  "Returns the relative portion of URL relative to URL-PREFIX, similar
-to what ENOUGH-NAMESTRING does for pathnames."
-  (let ((prefix-length (length url-prefix)))
-    (if (string= url url-prefix :end1 prefix-length)
-        (subseq url prefix-length)
-        url)))
-
 (defun cookie-value (name request)
   "Get the value of the cookie with the given name sent by the client
 or NIL if no such cookie was sent."

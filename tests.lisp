@@ -57,6 +57,14 @@ file."
       (let ((file (resolve-file (enough-url path uri-prefix) document-root)))
         (serve-file request file)))))
 
+(defun enough-url (url url-prefix)
+  "Returns the relative portion of URL relative to URL-PREFIX, similar
+to what ENOUGH-NAMESTRING does for pathnames."
+  (let ((prefix-length (length url-prefix)))
+    (if (string= url url-prefix :end1 prefix-length)
+        (subseq url prefix-length)
+        url)))
+
 (defun safe-filename-p (path)
   "Verify that a path, translated to a file doesn't contain any tricky
 bits such as '..'"
@@ -69,7 +77,7 @@ bits such as '..'"
 
 (defun resolve-file (path document-root)
   (merge-pathnames (subseq (add-index path) 1) document-root))
-  
+
 (defun add-index (filename &key (extension "html"))
   (format nil "~a~@[index~*~@[.~a~]~]" filename (ends-with #\/ filename) extension))
 
@@ -84,7 +92,7 @@ bits such as '..'"
 
 (defun add-handler (search-handler sub-handler)
   (push sub-handler (handlers search-handler)))
-  
+
 (defmethod handle-request ((handler search-handler) request)
   (loop for sub in (handlers handler)
      for result = (handle-request sub request)
@@ -99,7 +107,7 @@ file name of the request is exactly the given PATH."
       (handle-request sub-handler request))))
 
 (defun test-handler ()
-  (make-search-handler 
+  (make-search-handler
    (make-exact-path-handler "/form-test-params" 'form-test-params)
    (make-exact-path-handler "/form-test-octets" 'form-test-octets)
    (make-exact-path-handler "/form-test-stream" 'form-test-stream)
