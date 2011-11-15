@@ -43,6 +43,10 @@
    :acceptor
    :stream-logger
 
+   ;; Generic functions
+   :handle-request
+   :generate-error-page
+
    ;; Starting and stopping acceptor
    :start-server
    :start-acceptor
