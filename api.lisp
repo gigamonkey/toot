@@ -250,6 +250,11 @@ protocol was changed this will result in a redirect to the default
 port for the new protocol. CODE must be a 3xx redirection code and
 will be sent as status code."
   (check-type code (integer 300 399))
+(flet ((just-host (host-and-port)
+         (subseq host-and-port 0 (position #\: host-and-port)))
+       (just-port (host-and-port)
+         (let ((colon (position #\: host-and-port)))
+           (and colon (subseq host-and-port (1+ colon))))))
   (let ((url
          (if (uri-scheme (parse-uri target))
              target
@@ -261,17 +266,10 @@ will be sent as status code."
                        (or port (just-port requested-host))
                        target)))))
     (setf (response-header :location request) url)
-    (abort-request-handler request code)))
-
-(defun just-host (host-and-port)
-  (subseq host-and-port 0 (position #\: host-and-port)))
-
-(defun just-port (host-and-port)
-  (let ((colon (position #\: host-and-port)))
-    (and colon (subseq host-and-port (1+ colon)))))
+    (abort-request-handler request code))))
 
 (defun require-authorization (request &optional (realm "Toot"))
-  "Sends back appropriate headers to require basic HTTP
+  "Sends 401: Authorization Required reply to require basic HTTP
 authentication (see RFC 2617) for the realm REALM."
   (setf (response-header :www-authenticate request)
         (format nil "Basic realm=\"~A\"" (quote-string realm)))
