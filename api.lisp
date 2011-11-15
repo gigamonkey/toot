@@ -54,7 +54,7 @@
   acceptor)
 
 (defun stop-acceptor (acceptor &key soft)
-  "Start an acceptor from listening for connections. It can be
+  "Stop an acceptor from listening for connections. It can be
 restarted with START-ACCEPTOR."
   (setf (shutdown-p acceptor) t)
   (shutdown (taskmaster acceptor) acceptor)
@@ -80,11 +80,6 @@ restarted with START-ACCEPTOR."
      (,test ,@body)
      (t 'not-handled)))
 
-(defun cookie-out (name request)
-  "Returns the current value of the outgoing cookie named
-NAME. Search is case-sensitive."
-  (cdr (assoc name (cookies-out request) :test #'string=)))
-
 (defun response-header (name request)
   "Returns the current value of the outgoing http header named NAME.
 NAME should be a keyword or a string."
@@ -105,12 +100,13 @@ created."
         (setf (cdr entry) new-value)
         (push (cons name new-value) (response-headers request)))
 
-    ;; Special case these two. This is kind of hinky, but we need to set
-    ;; the slots if these are set since the slot values will be used in
-    ;; finalize-response-headers to set the actual header. Note that
-    ;; this relation is not directly symmetical. Setting the slot in the
-    ;; object does not immediately set the value in the headers alist.
-    ;; But it will eventually affect it in finalize-response-headers.
+    ;; Special case these two. This is kind of hinky, but we need to
+    ;; set the slots if these headers are set since the slot values
+    ;; will be used in finalize-response-headers to set the actual
+    ;; header. Note that this relation is not directly symmetical.
+    ;; Setting the slot in the object does not immediately set the
+    ;; value in the headers alist. But it will eventually affect it in
+    ;; finalize-response-headers.
     (case name
       (:content-length
        (check-type new-value integer)
@@ -118,7 +114,6 @@ created."
       (:content-type
        (check-type new-value (or null string))
        (setf (content-type request) new-value)))
-
 
     new-value))
 
@@ -211,7 +206,8 @@ if-modified-since request appropriately."
     (handle-if-modified-since time request)
 
     (with-open-file (file pathname :direction :input :element-type 'octet :if-does-not-exist nil)
-      (let ((bytes-to-send (maybe-handle-range-header request file)))
+      (multiple-value-bind (start bytes-to-send) (handle-range request (file-length file))
+        (when (plusp start) (file-position file start))
         (setf (status-code request) +http-ok+)
         (let* ((type (or content-type (guess-mime-type (pathname-type pathname))))
                (out (send-response-headers request bytes-to-send  type charset))
@@ -255,7 +251,7 @@ port for the new protocol. CODE must be a 3xx redirection code and
 will be sent as status code."
   (check-type code (integer 300 399))
   (let ((url
-         (if (starts-with-scheme-p target)
+         (if (uri-scheme (parse-uri target))
              target
              (let* ((requested-host (request-header :host request))
                     (current-protocol (if (ssl-config (acceptor request)) :https :http)))
@@ -290,8 +286,30 @@ TIME."
     ;; simple string comparison is sufficient; see RFC 2616 14.25
     (when (and if-modified-since
                (equal if-modified-since time-string))
-      (abort-request-handler request +http-not-modified+))
-    (values)))
+      (abort-request-handler request +http-not-modified+))))
+
+(defun handle-range (request bytes-available)
+  "If the request contains a Range header returns the starting
+  position and the number of bytes to transfer. Otherwise returns 0
+  and bytes-available. An invalid specified range is reported to the
+  client immediately with an HTTP 416 response."
+  (or
+   (register-groups-bind (start end)
+       ("^bytes (\\d+)-(\\d+)$" (request-header :range request) :sharedp t)
+     ;; body won't be executed if regular expression does not match
+     (setf start (parse-integer start))
+     (setf end (parse-integer end))
+     (when (or (< start 0) (>= end bytes-available))
+       (setf (response-header :content-range request) (format nil "bytes 0-~D/*" (1- bytes-available)))
+       (abort-request-handler
+        request
+        +http-requested-range-not-satisfiable+
+        (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
+                start end (1- bytes-available))))
+       (setf (status-code request) +http-partial-content+)
+       (setf (response-header :content-range request) (format nil "bytes ~D-~D/*" start end))
+       (values start (1+ (- end start))))
+   (values 0 bytes-available)))
 
 (defun cookie-value (name request)
   "Get the value of the cookie with the given name sent by the client
@@ -315,40 +333,7 @@ or NIL if no such cookie was sent."
       (t (push (cons name cookie) (cookies-out request))))
     cookie))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Internal
-
-(defun maybe-handle-range-header (request file)
-  "Helper function for serve-file. Determines whether the requests
-  specifies a Range header. If so, parses the header and position the
-  already opened file to the location specified. Returns the number of
-  bytes to transfer from the file. Invalid specified ranges are
-  reported to the client with a HTTP 416 status code."
-  (let ((bytes-available (file-length file)))
-    (or
-     (register-groups-bind (start end)
-         ("^bytes (\\d+)-(\\d+)$" (request-header :range request) :sharedp t)
-       ;; body won't be executed if regular expression does not match
-       (setf start (parse-integer start))
-       (setf end (parse-integer end))
-       (when (or (< start 0) (>= end bytes-available))
-         (setf (response-header :content-range request) (format nil "bytes 0-~D/*" (1- bytes-available)))
-         (abort-request-handler request +http-requested-range-not-satisfiable+
-                                (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
-                                        start end (1- bytes-available))))
-       (file-position file start)
-       (setf (status-code request) +http-partial-content+)
-       (setf (response-header :content-range request) (format nil "bytes ~D-~D/*" start end))
-       (1+ (- end start)))
-     bytes-available)))
-
-(defun starts-with-scheme-p (string)
-  "Checks whether the string STRING represents a URL which starts with
-a scheme, i.e. something like 'https://' or 'mailto:'."
-  (loop with scheme-char-seen-p = nil
-     for c across string
-     when (or (char-not-greaterp #\a c #\z)
-              (digit-char-p c)
-              (member c '(#\+ #\- #\.) :test #'char=))
-     do (setq scheme-char-seen-p t)
-     else return (and scheme-char-seen-p (char= c #\:))))
+(defun cookie-out (name request)
+  "Returns the current value of the outgoing cookie named
+NAME. Search is case-sensitive."
+  (cdr (assoc name (cookies-out request) :test #'string=)))
