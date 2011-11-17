@@ -275,8 +275,7 @@ different thread than accept-connection is running in."
                               (decf (requests-in-progress acceptor))
                               (when (shutdown-p acceptor)
                                 (condition-notify (shutdown-queue acceptor)))))
-                          (force-output content-stream)
-                          (setf content-stream (unchunked-stream content-stream))
+                          (finish-response-body request)
                           (when (close-stream-p request) (return)))))))
 
           (when content-stream
@@ -354,15 +353,14 @@ different thread than accept-connection is running in."
      :key private-key-file
      :password private-key-password)))
 
-(defun unchunked-stream (stream)
-  (cond
-    ((typep stream 'chunked-stream)
-     ;; Setting these flushes the output stream and checks if there's
-     ;; unread input which would be an error.
-     (setf (chunked-stream-output-chunking-p stream) nil)
-     (setf (chunked-stream-input-chunking-p stream) nil)
-     (chunked-stream-stream stream))
-    (t stream)))
+(defun finish-response-body (request)
+  (with-slots (content-stream) request
+    (force-output content-stream)
+    (when (typep content-stream 'chunked-stream)
+      ;; Setting these flushes the output stream and checks if there's
+      ;; unread input which would be an error.
+      (setf (chunked-stream-output-chunking-p content-stream) nil)
+      (setf (chunked-stream-input-chunking-p content-stream) nil))))
 
 (defun report-error-to-client (request error &optional backtrace)
   (when *log-lisp-errors-p*
@@ -709,14 +707,23 @@ dynamically abort rather than returning a stream."
 
   (finalize-response-headers request)
 
-  (let ((stream (content-stream request)))
-    (let ((header-stream (make-header-stream stream)))
+  (with-slots (content-stream) request
+    (let ((header-stream (make-header-stream content-stream)))
       (write-status-line header-stream (status-code request))
       (write-headers header-stream (response-headers request))
       (write-cookies header-stream (cookies-out request))
       (write-line-crlf header-stream ""))
     (setf (headers-sent-p request) t)
-    (if (eql (request-method request) :head) (throw 'head-request nil) stream)))
+
+    (when (eql (request-method request) :head)
+      (throw 'head-request nil))
+
+    (when (string= (response-header :transfer-encoding request) "chunked")
+      (unless (typep content-stream 'chunked-stream)
+        (setf content-stream (make-chunked-stream content-stream)))
+      (setf (chunked-stream-output-chunking-p content-stream) t))
+
+    content-stream))
 
 (defun finalize-response-headers (request)
   "Set certain headers automatically based on values in the request object."
@@ -755,7 +762,7 @@ dynamically abort rather than returning a stream."
            ;; client we're going to close the connection after sending
            ;; the reply.
            (setf (close-stream-p request) t)
-           (set-header :connection "Close")))))))
+           (set-header :connection "close")))))))
 
 (defun length-known-p (request)
   (let ((head-request-p (eql (request-method request) :head))

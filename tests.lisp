@@ -35,6 +35,15 @@
 (defun start-test-server (port)
   (setf *test-acceptor* (start-server :port port :handler (test-handler))))
 
+
+(defun start-trivial-server (&key (port 0))
+  (setf *test-acceptor* (start-server :port port :handler 'trivial-handler))
+  (format nil "http://localhost:~d/" (port *test-acceptor*)))
+
+(defun trivial-handler (request)
+  (let ((s (send-headers request)))
+    (format s "<html><head><title>Hello, world!</title></head><body><p>Hello, world!</p></body></html>")))
+
 (defun reset-test-handler ()
   (setf (handler *test-acceptor*) (test-handler)))
 
