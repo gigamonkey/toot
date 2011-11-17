@@ -50,6 +50,8 @@
          :reuseaddress t
          :backlog (listen-backlog acceptor)
          :element-type '(unsigned-byte 8)))
+  ;; Reset the port in case we passed 0 to get a random port.
+  (setf (slot-value acceptor 'port) (usocket:get-local-port (listen-socket acceptor)))
   (execute-acceptor (taskmaster acceptor) acceptor)
   acceptor)
 
