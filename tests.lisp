@@ -64,21 +64,8 @@ to what ENOUGH-NAMESTRING does for pathnames."
         (subseq url prefix-length)
         url)))
 
-(defun safe-filename-p (path)
-  "Verify that a path, translated to a file doesn't contain any tricky
-bits such as '..'"
-  (let ((directory (pathname-directory (subseq path 1))))
-    (or (stringp directory)
-        (null directory)
-        (and (consp directory)
-             (eql (first directory) :relative)
-             (every #'stringp (rest directory))))))
-
 (defun resolve-file (path document-root)
   (merge-pathnames (subseq (add-index path) 1) document-root))
-
-(defun add-index (filename &key (extension "html"))
-  (format nil "~a~@[index~*~@[.~a~]~]" filename (ends-with #\/ filename) extension))
 
 ;;; Simple composite handler that searches a list of sub-handlers for
 ;;; one that can handle the request.

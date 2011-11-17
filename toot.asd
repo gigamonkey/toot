@@ -37,6 +37,7 @@ output.")
 (export '*toot-version*)
 
 (defsystem :toot
+  :description "A minimal web server originally built by stripping down Edi Weitz's Hunchentoot"
   :serial t
   :version #.*toot-version*
   :depends-on (:alexandria

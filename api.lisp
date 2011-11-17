@@ -57,7 +57,7 @@
   "Stop an acceptor from listening for connections. It can be
 restarted with START-ACCEPTOR."
   (setf (shutdown-p acceptor) t)
-  (shutdown (taskmaster acceptor) acceptor)
+  (shutdown (taskmaster acceptor))
   (when soft
     (with-lock-held ((shutdown-lock acceptor))
       ;; FIXME: seems like this should perhaps be a while loop not a
@@ -129,8 +129,8 @@ we dynamically abort rather than returning a stream."
   (setf (status-code request) status-code)
   (let ((stream (send-response-headers request nil content-type charset)))
     (if (text-type-p content-type)
-        stream
-        (make-flexi-stream stream :external-format (make-external-format charset)))))
+        (make-flexi-stream stream :external-format (make-external-format charset))
+        stream)))
 
 (defun abort-request-handler (request response-status-code &optional body)
   "Abort the handling of a request, sending instead a response with
@@ -335,3 +335,34 @@ or NIL if no such cookie was sent."
   "Returns the current value of the outgoing cookie named
 NAME. Search is case-sensitive."
   (cdr (assoc name (cookies-out request) :test #'string=)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Trivial static file handler
+
+(defclass static-file-handler ()
+  ((root :initarg :root :accessor root)
+   (path-checker :initarg :path-checker :initform #'safe-filename-p :accessor path-checker))
+
+  (:documentation "A handler that serves files found under a given root directory."))
+
+(defmethod handle-request ((handler static-file-handler) request)
+  (with-slots (root path-checker) handler
+    (let ((*default-pathname-defaults* root)
+          (path (uri-path (request-uri request))))
+      (unless (funcall path-checker path)
+        (abort-request-handler request +http-forbidden+))
+      (serve-file request (merge-pathnames (subseq (add-index path) 1))))))
+
+(defun safe-filename-p (path)
+  "Verify that a path, translated to a file doesn't contain any tricky
+bits such as '..'"
+  (let ((directory (pathname-directory (subseq path 1))))
+    (or (stringp directory)
+        (null directory)
+        (and (consp directory)
+             (eql (first directory) :relative)
+             (every #'stringp (rest directory))))))
+
+(defun add-index (filename &key (extension "html"))
+  (format nil "~a~@[index~*~@[.~a~]~]" filename (ends-with #\/ filename) extension))

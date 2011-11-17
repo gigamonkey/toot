@@ -52,7 +52,8 @@
 
 (defclass stream-logger ()
   ((destination :initarg :destination :reader destination)
-   (lock :initform (make-lock "log-lock") :reader lock)))
+   (lock :initform (make-lock "log-lock") :reader lock))
+  (:documentation "A logger that writes to a given stream."))
 
 (defvar *default-logger* (make-instance 'stream-logger :destination *error-output*))
 

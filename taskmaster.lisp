@@ -27,18 +27,20 @@
 
 (in-package :toot)
 
-(defclass taskmaster () ())
 
-(defgeneric execute-acceptor (taskmaster acceptor))
+(defgeneric execute-acceptor (taskmaster acceptor)
+  (:documentation "Execute the acceptor by calling accept-connections."))
 
-(defgeneric handle-incoming-connection (taskmaster acceptor socket))
+(defgeneric handle-incoming-connection (taskmaster acceptor socket)
+  (:documentation "Handle a new connection by calling process-connection."))
 
-(defgeneric shutdown (taskmaster acceptor))
+(defgeneric shutdown (taskmaster)
+  (:documentation "Shutdown the taskmaster, cleaning up an threads it created."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Simple minded, single-threaded taskmaster implemenetation
 
-(defclass single-threaded-taskmaster (taskmaster) ())
+(defclass single-threaded-taskmaster () ())
 
 (defmethod execute-acceptor ((taskmaster single-threaded-taskmaster) acceptor)
   (accept-connections acceptor))
@@ -46,7 +48,7 @@
 (defmethod handle-incoming-connection ((taskmaster single-threaded-taskmaster) acceptor socket)
   (process-connection acceptor socket))
 
-(defmethod shutdown ((taskmaster taskmaster) acceptor) taskmaster)
+(defmethod shutdown ((taskmaster single-threaded-taskmaster)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Thread-per-connection taskmaster implemenetation
@@ -60,7 +62,7 @@
 ;;  - Bordeaux Threads doesn't provide a way to "reset" and restart a thread,
 ;;    and it's not clear how many Lisp implementations can do this.
 ;; So for now, we leave this out of the mix.
-(defclass thread-per-connection-taskmaster (taskmaster)
+(defclass thread-per-connection-taskmaster ()
   ((acceptor-process :accessor acceptor-process)
    (max-thread-count
     :type (or integer null)
@@ -166,10 +168,8 @@ implementations."))
     (t
      (create-connection-handler-thread taskmaster acceptor socket))))
 
-(defmethod shutdown ((taskmaster thread-per-connection-taskmaster) acceptor)
-  ;; just wait until the acceptor process has finished, then return
-  (loop while (thread-alive-p (acceptor-process taskmaster)) do (sleep 1))
-  taskmaster)
+(defmethod shutdown ((taskmaster thread-per-connection-taskmaster))
+  (loop while (thread-alive-p (acceptor-process taskmaster)) do (sleep 1)))
 
 (defun increment-taskmaster-request-count (taskmaster)
   (when (taskmaster-max-thread-count taskmaster)

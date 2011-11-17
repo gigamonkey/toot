@@ -42,6 +42,7 @@
 
    :acceptor
    :stream-logger
+   :static-file-handler
 
    ;; Generic functions
    :handle-request

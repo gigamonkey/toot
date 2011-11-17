@@ -88,6 +88,8 @@
    (shutdown-queue       :initform (make-condition-variable) :accessor shutdown-queue)
    (shutdown-lock        :initform (make-lock "toot-shutdown") :accessor shutdown-lock))
 
+  (:documentation "The object that listens on a socket for connections.")
+
   (:default-initargs
     :address nil
     :port nil
