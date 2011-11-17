@@ -30,7 +30,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Start and stop the server
 
-(defun start-server (&rest args &key (handler (error "Must specify handler.")) port)
+(defun start-server (&rest args &key (handler (error "Must specify handler.")) port &allow-other-keys)
   "Instantiate an acceptor and start it listening."
   (start-acceptor
    (apply #'make-instance 'acceptor
