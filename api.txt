@@ -10,24 +10,27 @@ Before it hands off to the handler, Toot has to deal with a bunch of
 gorp involving persistent connections, parsing the request, chunking
 output, etc. But that should all be of little to no concern of the
 user who just provides a handler that knows what to do with the
-requests when they’re available. 
+requests when they’re available.
 
-A \i{handler} is an object which can be passed as the first argument
-to the \code{handle-request} generic function.
+A \i{handler} is any object that can be passed as the first argument
+to the generic function \code{handle-request}:
 
    (defgeneric handle-request (handler request))
 
-Out of the box, Toot, defines a method specializing the \code{handler}
-parameter on \code{function}, which just turns around and calls the
-function with one argument, the \code{request}.
+Out of the box, Toot, defines methods specializing the \code{handler}
+parameter on \code{function} and \code{symbol}, which just turn around
+and funcall the handler one argument, the \code{request}.
 
 A handler has four choices of how it can handle a request.
 
-  - It can call \code{send-headers} on the request which will return a
-    stream to which it can then write the body of the reply.
+  - It can return a string which will be properly encoded (based on
+    the values of content-type and charset set on the request object)
+    and sent as the body of the reply.
 
-  - It can return a string which will be properly encoded and sent as
-    the body of the reply.
+  - It can call \code{send-headers} on the request which will return a
+    stream to which it can then write the body of the reply. In this
+    case any outgoing headers such as content-type and outgoing
+    cookies need to be set before calling send-headers.
 
   - It can call \code{abort-request-handler} with an HTTP status code,
     usually >= 300 which will cause the server to send an appropriate
@@ -35,36 +38,23 @@ A handler has four choices of how it can handle a request.
     found, and also thing like redirects, e.g. 301: Moved permanently.)
 
   - It can return the symbol \code{not-handled}. If the handler called
-    directly by Toot returns not-handled, the server will send a 404:
-    Not found reply. But a composite handler could use that return
-    value as an indication to try another handler.
-
-A simple handler is something that maps the incoming request to a
-response. For example the function returned by
-\code{make-static-file-handler} simply maps the request URI to a file
-under a given directory and serves it if it exists.
-
-A more complex handler could be built by composing sub-handlers. For
-instance, one could build a handler that looks at the request in order
-to determine which sub-handler to hand it off to. Or one that has a
-list of handlers that it tries in order until one handles it (as
-indicated by not returning \code{not-handled})
+    directly by Toot returns \code{not-handled}, the server will send
+    a \code{404: Not found} reply. But a composite handler could use
+    that return value as an indication to try another handler.
 
 * Functions useful in handlers
 
 ** Request data
 
-script-name
+request-uri
 
-method
-
-query-string
+request-method
 
 get-parameter
 
 post-parameter
 
-parameter 
+parameter
 
 header-in
 
@@ -95,39 +85,34 @@ set-cookie
 
 (setf content-type)
 
-(setf external-format)
+(setf charset)
 
-(setf header-out)
+(setf response-header)
 
 ** For controlling reply — high-level
 
-serve-file — serve up a specific file. Handles if-modified-since and
-guesses at content-type based on extension if not supplied. Sends 404:
-Not found reply if file does not exist.
+serve-file — serve up a specific file. Handles If-Modified-Since and
+Range requests. Guesses at Content-Type based on extension if not
+supplied. Sends “404: Not Found” reply if file does not exist.
 
 no-cache — add headers to the reply which should prevent caching by
 the browser.
 
 redirect — send a redirect rather than generating a reply.
 
-require-authorization — sends headers requiring basic HTTP
+require-authorization — sends “401: Authorization Required” headers requiring basic HTTP
 authentication.
 
-handle-if-modified-since — send a Not Modified reply if the time
+handle-if-modified-since — sends a “304: Not Modified” reply if the time
 provided is the same as the time provided in the request.
+
+handle-range — compute the starting position and number of bytes to
+send. Send a “416: Requested range not satisfiable” if the range is
+invalid.
 
 ** Misc
 
 log-message — log a message to Toot’s message log.
 
-* Functions useful for composing handlers
-
 maybe-handle — macro for writing composable handlers.
-
-make-prefix-handler
-
-make-regex-handler
-
-make-exact-path-handler
-
 
