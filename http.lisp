@@ -66,7 +66,9 @@
    (read-timeout :initarg :read-timeout :reader read-timeout)
    (write-timeout :initarg :write-timeout :reader write-timeout)
    (listen-backlog :initarg :listen-backlog :reader listen-backlog)
-   (ssl-config :initarg :ssl-config :accessor ssl-config)
+   (ssl-certificate-file :initarg :ssl-certificate-file :initform nil :reader ssl-certificate-file)
+   (ssl-private-key-file :initarg :ssl-private-key-file :initform nil :reader ssl-private-key-file)
+   (ssl-private-key-password :initarg :ssl-private-key-password :initform nil :reader ssl-private-key-password)
 
    ;; Plugins
    (handler :initarg :handler :accessor handler)
@@ -99,13 +101,15 @@
     :persistent-connections-p t
     :read-timeout *default-connection-timeout*
     :write-timeout *default-connection-timeout*
-    :ssl-config nil
     :error-generator 'default-error-message-generator))
 
 (defmethod initialize-instance :after ((acceptor acceptor) &key &allow-other-keys)
-  (with-slots (port ssl-config) acceptor
-    (unless port
-      (setf port (if ssl-config 443 80)))))
+  (with-slots (port ssl-certificate-file ssl-private-key-file) acceptor
+    (unless port (setf port (if ssl-certificate-file 443 80)))
+    ;; OpenSSL doesn't know much about Lisp pathnames...
+    (when ssl-certificate-file
+      (setf ssl-certificate-file (namestring (truename ssl-certificate-file)))
+      (setf ssl-private-key-file (namestring (truename ssl-private-key-file))))))
 
 (defmethod print-object ((acceptor acceptor) stream)
   (print-unreadable-object (acceptor stream :type t)
@@ -172,16 +176,9 @@
    (split "\\s*[,;]\\s*" (cdr (assoc :cookie request-headers)))
    +utf-8+))
 
-(defclass ssl-config ()
-  ((certificate-file :initarg :certificate-file :reader certificate-file)
-   (private-key-file :initarg :private-key-file :reader private-key-file)
-   (private-key-password :initform nil :initarg :private-key-password :reader private-key-password)))
 
-(defmethod initialize-instance :after ((ssl ssl-config) &key &allow-other-keys)
-  ;; OpenSSL doesn't know much about Lisp pathnames...
-  (with-slots (private-key-file certificate-file) ssl
-    (setf private-key-file (namestring (truename private-key-file)))
-    (setf certificate-file (namestring (truename certificate-file)))))
+
+
 
 ;;; Convenience methods to pass along log-message calls until we hit the actual logger.
 
@@ -338,20 +335,19 @@ different thread than accept-connection is running in."
       (delete-tmp-files request))))
 
 (defun make-socket-stream (socket acceptor)
-  (let ((base-stream (usocket:socket-stream socket))
-        (ssl-config (ssl-config acceptor)))
-    (cond
-      (ssl-config (setup-ssl-stream ssl-config base-stream))
-      (t base-stream))))
+  (let ((base-stream (usocket:socket-stream socket)))
+    (if (ssl-certificate-file acceptor)
+        (setup-ssl-stream acceptor base-stream)
+        base-stream)))
 
-(defun setup-ssl-stream (adapter stream)
+(defun setup-ssl-stream (acceptor stream)
   ;; attach SSL to the stream if necessary
-  (with-slots (certificate-file private-key-file private-key-password) adapter
+  (with-slots (ssl-certificate-file ssl-private-key-file ssl-private-key-password) acceptor
     (cl+ssl:make-ssl-server-stream
      stream
-     :certificate certificate-file
-     :key private-key-file
-     :password private-key-password)))
+     :certificate ssl-certificate-file
+     :key ssl-private-key-file
+     :password ssl-private-key-password)))
 
 (defun finish-response-body (request)
   (with-slots (content-stream) request

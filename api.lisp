@@ -261,7 +261,7 @@ will be sent as status code."
          (if (uri-scheme (parse-uri target))
              target
              (let* ((requested-host (request-header :host request))
-                    (current-protocol (if (ssl-config (acceptor request)) :https :http)))
+                    (current-protocol (if (ssl-certificate-file (acceptor request)) :https :http)))
                (format nil "~(~a~)://~a~@[:~a~]~a"
                        (or protocol current-protocol)
                        (or host (just-host requested-host))

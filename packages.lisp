@@ -62,7 +62,6 @@
    :persistent-connections-p
    :read-timeout
    :write-timeout
-   :ssl-config
 
    ;; Pluggable parts of acceptor
    :handler
