@@ -40,6 +40,8 @@
   (:import-from :toot-asd :*toot-version*)
   (:export
 
+   :*toot-version*
+
    :acceptor
    :stream-logger
    :static-file-handler

@@ -34,7 +34,7 @@
   "A string denoting the current version of Toot. Used for diagnostic
 output.")
 
-(export '*toot-version*)
+;(export '*toot-version*)
 
 (defsystem :toot
   :description "A minimal web server originally built by stripping down Edi Weitz's Hunchentoot"
@@ -64,4 +64,5 @@ output.")
                (:file "log")
                (:file "http")
                (:file "api")
-               (:file "tests")))
+               (:file "tests")
+               (:file "documentation")))

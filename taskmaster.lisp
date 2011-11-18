@@ -35,7 +35,7 @@
   (:documentation "Handle a new connection by calling process-connection."))
 
 (defgeneric shutdown (taskmaster)
-  (:documentation "Shutdown the taskmaster, cleaning up an threads it created."))
+  (:documentation "Shutdown the taskmaster, cleaning up any threads it created."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Simple minded, single-threaded taskmaster implemenetation
