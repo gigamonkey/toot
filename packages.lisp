@@ -34,7 +34,8 @@
         :bordeaux-threads
         :chunga
         :cl-ppcre
-        :flexi-streams)
+        :flexi-streams
+        :puri)
   (:shadow :defconstant)
   ;; see asdf system definition
   (:import-from :toot-asd :*toot-version*)
@@ -147,13 +148,12 @@
    :*tmp-directory*
 
    ;; These are thin wrappers around the corresponding PURI functions.
-   :uri-scheme
-   :uri-host
-   :uri-port
-   :uri-path
-   :uri-query
-   :uri-plist
-   :uri-authority
+   :request-scheme
+   :request-host
+   :request-port
+   :request-path
+   :request-query
+   :request-authority
 
    ;; HTTP status codes
    :+http-accepted+

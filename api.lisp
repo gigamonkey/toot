@@ -72,33 +72,29 @@ restarted with START-ACCEPTOR."
   (setf (listen-socket acceptor) nil)
   acceptor)
 
-(defun uri-scheme (uri)
-  "Get the scheme part of the URI."
-  (puri:uri-scheme uri))
+(defun request-scheme (request)
+  "Get the scheme part of the request's URI."
+  (uri-scheme (request-uri request)))
 
-(defun uri-host (uri)
-  "Get the host part of the URI."
-  (puri:uri-host uri))
+(defun request-host (request)
+  "Get the host part of the request's URI."
+  (uri-host (request-uri request)))
 
-(defun uri-port (uri)
-  "Get the port part of the URI."
-  (puri:uri-port uri))
+(defun request-port (request)
+  "Get the port part of the request's URI."
+  (uri-port (request-uri request)))
 
-(defun uri-path (uri)
-  "Get the path part of the URI."
-  (puri:uri-path uri))
+(defun request-path (request)
+  "Get the path part of the request's URI."
+  (uri-path (request-uri request)))
 
-(defun uri-query (uri)
-  "Get the query part of the URI."
-  (puri:uri-query uri))
+(defun request-query (request)
+  "Get the query part of the request's URI."
+  (uri-query (request-uri request)))
 
-(defun uri-plist (uri)
-  "Get the plist part of the URI."
-  (puri:uri-plist uri))
-
-(defun uri-authority (uri)
-  "Get the authority part of the URI."
-  (puri:uri-authority uri))
+(defun request-authority (request)
+  "Get the authority part of the request's URI."
+  (uri-authority (request-uri request)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public API
@@ -281,7 +277,7 @@ will be sent as status code."
          (let ((colon (position #\: host-and-port)))
            (and colon (subseq host-and-port (1+ colon))))))
   (let ((url
-         (if (uri-scheme (puri:parse-uri target))
+         (if (uri-scheme (parse-uri target))
              target
              (let* ((requested-host (request-header :host request))
                     (current-protocol (if (ssl-certificate-file (acceptor request)) :https :http)))

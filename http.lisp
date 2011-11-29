@@ -261,7 +261,7 @@ different thread than accept-connection is running in."
                                          :request-headers request-headers
                                          :content-stream content-stream
                                          :request-method request-method
-                                         :request-uri (puri:parse-uri url-string)
+                                         :request-uri (parse-uri url-string)
                                          :server-protocol protocol)))
                           (with-lock-held (lock) (incf (requests-in-progress acceptor)))
                           (unwind-protect
