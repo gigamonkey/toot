@@ -147,6 +147,15 @@
    :*show-lisp-errors-p*
    :*tmp-directory*
 
+   ;; Some symbols inherited from PURI that our users will need
+   :uri-scheme
+   :uri-host
+   :uri-port
+   :uri-path
+   :uri-query
+   :uri-plist
+   :uri-authority
+
    ;; HTTP status codes
    :+http-accepted+
    :+http-authorization-required+
