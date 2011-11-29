@@ -362,5 +362,6 @@ bits such as '..'"
              (eql (first directory) :relative)
              (every #'stringp (rest directory))))))
 
-(defun add-index (filename &optional (extension "html"))
-  (format nil "~a~@[index~*~@[.~a~]~]" filename (ends-with #\/ filename) extension))
+(defun add-index (filename &key (name "index") (extension "html"))
+  "Add an index file name to a directory filename. Defaults to index.html"
+  (format nil "~a~:[~;~a~@[.~a~]~]" filename (ends-with #\/ filename) name extension))
