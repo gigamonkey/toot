@@ -261,7 +261,7 @@ different thread than accept-connection is running in."
                                          :request-headers request-headers
                                          :content-stream content-stream
                                          :request-method request-method
-                                         :request-uri (parse-uri url-string)
+                                         :request-uri (puri:parse-uri url-string)
                                          :server-protocol protocol)))
                           (with-lock-held (lock) (incf (requests-in-progress acceptor)))
                           (unwind-protect
@@ -591,10 +591,10 @@ alist or NIL if there was no data or the data could not be parsed."
   "Creates an alist of POST parameters from the stream STREAM which is
 supposed to be of content type 'multipart/form-data'."
   (let* ((parsed-content-type-header (parse-header content-type-header :value))
-	 (boundary (or (cdr (find-parameter
+         (boundary (or (cdr (find-parameter
                              "BOUNDARY"
                              (header-parameters parsed-content-type-header)))
-		       (return-from parse-rfc2388-form-data))))
+                       (return-from parse-rfc2388-form-data))))
     (loop for part in (parse-mime stream boundary tmp-filename-generator)
        for headers = (mime-part-headers part)
        for content-disposition-header = (find-content-disposition-header headers)
@@ -887,4 +887,3 @@ div {
   "Returns a reason phrase for the HTTP return code STATUS-CODE (which
 should be an integer) or NIL for return codes Toot doesn't know."
   (gethash status-code *http-reason-phrase-map* "No reason phrase known"))
-

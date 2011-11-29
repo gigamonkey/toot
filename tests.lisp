@@ -60,7 +60,7 @@ supplied, it will strip that from the URI before mapping it to a
 file."
   (lambda (request)
     (let ((path (uri-path (request-uri request))))
-      (unless (safe-filename-p path)
+      (unless (safe-pathname-p path)
         (abort-request-handler request +http-forbidden+))
       (let ((file (resolve-file (enough-url path uri-prefix) document-root)))
         (serve-file request file)))))

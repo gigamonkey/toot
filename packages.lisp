@@ -34,8 +34,7 @@
         :bordeaux-threads
         :chunga
         :cl-ppcre
-        :flexi-streams
-        :puri)
+        :flexi-streams)
   (:shadow :defconstant)
   ;; see asdf system definition
   (:import-from :toot-asd :*toot-version*)
@@ -147,7 +146,7 @@
    :*show-lisp-errors-p*
    :*tmp-directory*
 
-   ;; Some symbols inherited from PURI that our users will need
+   ;; These are thin wrappers around the corresponding PURI functions.
    :uri-scheme
    :uri-host
    :uri-port
