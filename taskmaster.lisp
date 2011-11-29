@@ -29,10 +29,10 @@
 
 
 (defgeneric execute-acceptor (taskmaster acceptor)
-  (:documentation "Execute the acceptor by calling accept-connections."))
+  (:documentation "Called on a taskmaster which should call accept-connections on the acceptor."))
 
 (defgeneric handle-incoming-connection (taskmaster acceptor socket)
-  (:documentation "Handle a new connection by calling process-connection."))
+  (:documentation "Called on a taskmaster to handle a new connection by calling process-connection on acceptor."))
 
 (defgeneric shutdown (taskmaster)
   (:documentation "Shutdown the taskmaster, cleaning up any threads it created."))

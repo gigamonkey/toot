@@ -28,6 +28,7 @@
 (in-package :cl-user)
 
 (defpackage :toot
+  (:documentation "A very simple web server.")
   (:use :cl
         :alexandria
         :bordeaux-threads
@@ -45,6 +46,8 @@
    :acceptor
    :stream-logger
    :static-file-handler
+   :safe-pathname-p
+   :add-index
 
    ;; Generic functions
    :handle-request

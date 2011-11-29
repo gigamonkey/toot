@@ -39,7 +39,7 @@
   ()
   (:documentation "Like TOOT-ERROR but with formatting capabilities."))
 
-(defun toot-error (format-control &rest format-arguments)
+(defun internal-error (format-control &rest format-arguments)
   "Signals an error of type TOOT-SIMPLE-ERROR with the provided
 format control and arguments."
   (error 'toot-simple-error

@@ -41,7 +41,7 @@
 (defun start-acceptor (acceptor)
   "Start an existing acceptor listening for connections."
   (when (listen-socket acceptor)
-    (toot-error "acceptor ~A is already listening" acceptor))
+    (internal-error "acceptor ~A is already listening" acceptor))
 
   (setf (shutdown-p acceptor) nil)
   (setf (listen-socket acceptor)
@@ -199,12 +199,7 @@ if-modified-since request appropriately."
     (abort-request-handler request +http-not-found+))
 
   (let ((time (or (file-write-date pathname) (get-universal-time))))
-
-    ;; FIXME: do we really need to set the headers even if we might
-    ;; send a not modified response? If not, let's check that first.
-    (setf (response-header :last-modified request) (rfc-1123-date time))
     (setf (response-header :accept-ranges request) "bytes")
-
     (handle-if-modified-since time request)
 
     (with-open-file (file pathname :direction :input :element-type 'octet :if-does-not-exist nil)
@@ -281,6 +276,7 @@ authentication (see RFC 2617) for the realm REALM."
   "Handles the 'If-Modified-Since' header of REQUEST.  The date string
 is compared to the one generated from the supplied universal time
 TIME."
+  (setf (response-header :last-modified request) (rfc-1123-date time))
   (let ((if-modified-since (request-header :if-modified-since request))
         (time-string (rfc-1123-date time)))
     ;; simple string comparison is sufficient; see RFC 2616 14.25
@@ -344,7 +340,7 @@ NAME. Search is case-sensitive."
 
 (defclass static-file-handler ()
   ((root :initarg :root :accessor root)
-   (path-checker :initarg :path-checker :initform #'safe-filename-p :accessor path-checker))
+   (path-checker :initarg :path-checker :initform #'safe-pathname-p :accessor path-checker))
 
   (:documentation "A handler that serves files found under a given root directory."))
 
@@ -356,7 +352,7 @@ NAME. Search is case-sensitive."
         (abort-request-handler request +http-forbidden+))
       (serve-file request (merge-pathnames (subseq (add-index path) 1))))))
 
-(defun safe-filename-p (path)
+(defun safe-pathname-p (path)
   "Verify that a path, translated to a file doesn't contain any tricky
 bits such as '..'"
   (let ((directory (pathname-directory (subseq path 1))))
@@ -366,5 +362,5 @@ bits such as '..'"
              (eql (first directory) :relative)
              (every #'stringp (rest directory))))))
 
-(defun add-index (filename &key (extension "html"))
+(defun add-index (filename &optional (extension "html"))
   (format nil "~a~@[index~*~@[.~a~]~]" filename (ends-with #\/ filename) extension))
