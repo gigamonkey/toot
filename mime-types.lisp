@@ -136,6 +136,7 @@
     ("application/x-iso9660-image" "iso")
     ("application/x-java-jnlp-file" "jnlp")
     ("application/x-javascript" "js")
+    ("application/json" "json")
     ("application/x-jmol" "jmz")
     ("application/x-kchart" "chrt")
     ("application/x-killustrator" "kil")
