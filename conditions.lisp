@@ -94,13 +94,12 @@ SETUID for example) is not implemented for a specific Lisp."))
 
 (defgeneric maybe-invoke-debugger (condition)
   (:documentation "This generic function is called whenever a
-condition CONDITION is signaled in Toot.  You might want to
-specialize it on specific condition classes for debugging purposes.")
+condition CONDITION is signaled in Toot. You might want to specialize
+it on specific condition classes for debugging purposes. The default
+method invokes the debugger with CONDITION if *CATCH-ERRORS-P* is
+NIL.")
   (:method (condition)
-   "The default method invokes the debugger with CONDITION if
-*CATCH-ERRORS-P* is NIL."
-   (unless *catch-errors-p*
-     (invoke-debugger condition))))
+    (when *debug-errors-p* (invoke-debugger condition))))
 
 (defmacro with-debugger (&body body)
   "Executes BODY and invokes the debugger if an error is signaled and

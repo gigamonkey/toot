@@ -143,9 +143,10 @@ purposes.")
   "Log level for Lisp warnings.  Should be one of :ERROR, :WARNING
 \(the default), or :INFO.")
 
-(defvar *catch-errors-p* t
-  "Whether Toot should catch and log errors \(or rather invoke
-the debugger).")
+(defvar *debug-errors-p* t
+  "When true, Toot drops into the debugger on unhandled errors.
+  Otherwise unhandled errors signaled while processing requests are
+  logged.")
 
 (defconstant +toot-project-url+ "https://github.com/gigamonkey/toot")
 

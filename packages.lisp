@@ -132,7 +132,7 @@
    :shutdown
 
    ;; Special vars
-   :*catch-errors-p*
+   :*debug-errors-p*
    :*default-connection-timeout*
    :*default-content-type*
    :*default-external-format*
