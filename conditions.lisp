@@ -74,15 +74,19 @@ format control and arguments."
 
 (define-condition operation-not-implemented (toot-error)
   ((operation :initarg :operation
-              :reader toot-operation-not-implemented-operation
+              :reader operation
               :documentation "The name of the unimplemented operation."))
   (:report (lambda (condition stream)
              (format stream "The operation ~A is not yet implemented for the implementation ~A.
 Consider sending a patch..."
-                     (toot-operation-not-implemented-operation condition)
+                     (operation condition)
                      (lisp-implementation-type))))
   (:documentation "This warning is signalled when an operation \(like
 SETUID for example) is not implemented for a specific Lisp."))
+
+(define-condition request-aborted (toot-condition)
+  ((response-status-code :initarg :response-status-code :reader response-status-code)
+   (body :initarg :body :initform nil :reader body)))
 
 (defun not-implemented (name)
   "Used to signal an error if an operation named NAME is not implemented."

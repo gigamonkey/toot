@@ -99,12 +99,9 @@ restarted with START-ACCEPTOR."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public API
 
-(defmacro maybe-handle (test &body body)
-  "Handle the request with BODY if TEST is true. Otherwise return
-'NOT-HANDLED."
-  `(cond
-     (,test ,@body)
-     (t 'not-handled)))
+(defmacro with-response-body ((stream request) &body body)
+  `(let ((,stream (send-headers ,request)))
+     ,@body))
 
 (defun response-header (name request)
   "Returns the current value of the outgoing http header named NAME.
@@ -158,12 +155,14 @@ we dynamically abort rather than returning a stream."
         (make-flexi-stream stream :external-format (make-external-format charset))
         stream)))
 
-(defun abort-request-handler (request response-status-code &optional body)
+(defun abort-request-handler (response-status-code &optional body)
   "Abort the handling of a request, sending instead a response with
-the given response-status-code. A request can only be aborted if
-SEND-HEADERS has not been called."
-  (setf (status-code request) response-status-code)
-  (throw 'handler-done body))
+the given response-status-code and either the given body or a default
+body based on the error code. A request can only be aborted if
+SEND-HEADERS has not been called. (SEND-HEADERS is called by
+WITH-RESPONSE-BODY). If a handler neither generates a response nor
+aborts, then a 404: Not Found response will be sent."
+  (error 'request-aborted :response-status-code response-status-code :body body))
 
 (defun request-header (name request)
   "Returns the incoming header with name NAME. NAME can be a
@@ -220,7 +219,7 @@ if-modified-since request appropriately."
             (wild-pathname-p pathname)
             (not (fad:file-exists-p pathname))
             (fad:directory-exists-p pathname))
-    (abort-request-handler request +http-not-found+))
+    (abort-request-handler +http-not-found+))
 
   (let ((time (or (file-write-date pathname) (get-universal-time))))
     (setf (response-header :accept-ranges request) "bytes")
@@ -287,14 +286,14 @@ will be sent as status code."
                        (or port (just-port requested-host))
                        target)))))
     (setf (response-header :location request) url)
-    (abort-request-handler request code))))
+    (abort-request-handler code))))
 
 (defun require-authorization (request &optional (realm "Toot"))
   "Sends 401: Authorization Required reply to require basic HTTP
 authentication (see RFC 2617) for the realm REALM."
   (setf (response-header :www-authenticate request)
         (format nil "Basic realm=\"~A\"" (quote-string realm)))
-  (abort-request-handler request +http-authorization-required+))
+  (abort-request-handler +http-authorization-required+))
 
 (defun handle-if-modified-since (time request)
   "Handles the 'If-Modified-Since' header of REQUEST.  The date string
@@ -306,7 +305,7 @@ TIME."
     ;; simple string comparison is sufficient; see RFC 2616 14.25
     (when (and if-modified-since
                (equal if-modified-since time-string))
-      (abort-request-handler request +http-not-modified+))))
+      (abort-request-handler +http-not-modified+))))
 
 (defun handle-range (request bytes-available)
   "If the request contains a Range header returns the starting
@@ -322,7 +321,6 @@ TIME."
      (when (or (< start 0) (>= end bytes-available))
        (setf (response-header :content-range request) (format nil "bytes 0-~D/*" (1- bytes-available)))
        (abort-request-handler
-        request
         +http-requested-range-not-satisfiable+
         (format nil "invalid request range (requested ~D-~D, accepted 0-~D)"
                 start end (1- bytes-available))))
@@ -368,12 +366,16 @@ NAME. Search is case-sensitive."
 
   (:documentation "A handler that serves files found under a given root directory."))
 
+(defmethod initialize-instance :after ((h static-file-handler) &key &allow-other-keys)
+  (with-slots (root) h
+    (setf root (merge-pathnames root))))
+
 (defmethod handle-request ((handler static-file-handler) request)
   (with-slots (root path-checker) handler
     (let ((*default-pathname-defaults* root)
           (path (uri-path (request-uri request))))
       (unless (funcall path-checker path)
-        (abort-request-handler request +http-forbidden+))
+        (abort-request-handler +http-forbidden+))
       (serve-file request (merge-pathnames (subseq (add-index path) 1))))))
 
 (defun safe-pathname-p (path)

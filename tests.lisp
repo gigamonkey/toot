@@ -61,7 +61,7 @@ file."
   (lambda (request)
     (let ((path (uri-path (request-uri request))))
       (unless (safe-pathname-p path)
-        (abort-request-handler request +http-forbidden+))
+        (abort-request-handler +http-forbidden+))
       (let ((file (resolve-file (enough-url path uri-prefix) document-root)))
         (serve-file request file)))))
 
@@ -90,15 +90,13 @@ to what ENOUGH-NAMESTRING does for pathnames."
 
 (defmethod handle-request ((handler search-handler) request)
   (loop for sub in (handlers handler)
-     for result = (handle-request sub request)
-     when (not (eql result 'not-handled)) return result
-     finally (return 'not-handled)))
+     do (handle-request sub request) until (headers-sent-p request)))
 
 (defun make-exact-path-handler (path sub-handler)
   "Make a handler that handles the request with SUB-HANDLER if the
 file name of the request is exactly the given PATH."
   (lambda (request)
-    (maybe-handle (string= path (uri-path (request-uri request)))
+    (when (string= path (uri-path (request-uri request)))
       (handle-request sub-handler request))))
 
 (defun test-handler ()
@@ -110,7 +108,7 @@ file name of the request is exactly the given PATH."
    (make-static-file-handler (test-document-directory))))
 
 (defun form-test-get-params (request)
-  (with-output-to-string (s)
+  (with-response-body (s request)
     (format s "~&<html><head><title>Form test params</title></head><body>")
     (format s "~&<h1>Form results via <code>GET</code></h1>")
     (loop for (k . v) in (request-headers request) do
@@ -128,7 +126,7 @@ file name of the request is exactly the given PATH."
     (format s "~&</body></html>")))
 
 (defun form-test-params (request)
-  (with-output-to-string (s)
+  (with-response-body (s request)
     (format s "~&<html><head><title>Form test params</title></head><body>")
     (format s "~&<h1>Form results via <code>post-parameters</code></h1>")
     (loop for (k . v) in (request-headers request) do
@@ -146,14 +144,14 @@ file name of the request is exactly the given PATH."
     (format s "~&</body></html>")))
 
 (defun form-test-octets (request)
-  (with-output-to-string (s)
+  (with-response-body (s request)
     (format s "~&<html><head><title>Form test octets</title></head><body>")
     (format s "~&<h1>Form results via <code>body-octets</code></h1>")
     (format s "~&<p><pre>~a</pre></p>" (escape-for-html (octets-to-string (body-octets request))))
     (format s "~&</body></html>")))
 
 (defun form-test-stream (request)
-  (with-output-to-string (s)
+  (with-response-body (s request)
     (format s "~&<html><head><title>Form test stream</title></head><body>")
     (format s "~&<h1>Form results via <code>body-stream</code></h1>")
     (format s "~&<p><pre>")

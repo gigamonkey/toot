@@ -159,8 +159,8 @@
         (setf (status-code request) +http-bad-request+)))))
 
 (defun parse-query-string (request-uri)
-  ;; FIXME: This *supports-char* thing seems hinky to
-  ;; me. Is this really the best we can do.?
+  ;; FIXME: This *substitution-char* thing seems hinky to me. Is this
+  ;; really the best we can do.?
   (let ((*substitution-char* #\?))
     (form-url-encoded-list-to-alist
      (split "&" (uri-query request-uri)))))
@@ -284,51 +284,41 @@ different thread than accept-connection is running in."
 
 (defun process-request (request)
   "Process a single request. Called repeatedly by process-connection."
-
   ;; SEND-RESPONSE-HEADERS will throw this after the headers are
   ;; written if the request was a HEAD request.
+
+  ;; FIXME: should the CATCH be inside the UNWIND-PROTECT? Hmmm.
+
+  ;; FIXME: Also, after the call to handle-request we should perhaps
+  ;; check here that if the content-length was set that the requisite
+  ;; number of bytes were sent. If not we should probabaly set
+  ;; close-stream-p to t since things are going to be all messed up.
   (catch 'head-request
     (unwind-protect
-         (multiple-value-bind (body error backtrace)
-             ;; The handler can throw handler-done (by calling
-             ;; abort-request-handler) to provide a body, error, and
-             ;; backtrace after setting the HTTP status code.
-             ;; Otherwise the handler can either call SEND-HEADERS and
-             ;; write the body to the stream or return a string which
-             ;; will be encoded and sent as the body of the reply.
-             (catch 'handler-done
-               (handler-bind
-                   ((error
-                     (lambda (cond)
-                       ;; if the headers were already sent, the error happened
-                       ;; within the body and we have to close the stream
-                       (when (headers-sent-p request) (setf (close-stream-p request) t))
-                       (throw 'handler-done (values nil cond (get-backtrace)))))
-                    (warning
-                     (lambda (cond)
-                       (when *log-lisp-warnings-p*
-                         (log-message request *lisp-warnings-log-level* "~A" cond)))))
-                 (with-debugger
-                   (let ((result (handle-request (handler (acceptor request)) request)))
-                     (cond
-                       ((eql result 'not-handled)
-                        (abort-request-handler request +http-not-found+))
-                       (t result))))))
-
-           (when error (report-error-to-client request error backtrace))
-
-           ;; Headers will have been sent if the handler called
-           ;; SEND-HEADERS and wrote the response directly to the
-           ;; stream. In that case there is nothing left to do but
-           ;; clean up. Otherwise, send the returned body or, if there
-           ;; is none, an error message we generated based on the
-           ;; return code.
-           (unless (headers-sent-p request)
-             (handler-case*
-                 (send-response request (or body (error-body request)))
-               (error (e)
-                 ;; error occured while writing to the client. attempt to report.
-                 (report-error-to-client request e)))))
+         (block handle-request
+           (handler-bind
+               ((warning (lambda (w)
+                           (maybe-log-warning request w)))
+                (error   (lambda (e)
+                           ;; If the headers were already sent, then
+                           ;; the error happened within the body and
+                           ;; who knows what state things are in. So
+                           ;; close the stream.
+                           (when (headers-sent-p request)
+                             (setf (close-stream-p request) t))
+                           (let ((backtrace (get-backtrace)))
+                             (maybe-log-error request e backtrace)
+                             (report-error-to-client request e backtrace)
+                           (return-from handle-request)))))
+           (with-debugger
+             (handler-case
+                 (progn
+                   (handle-request (handler (acceptor request)) request)
+                   (unless (headers-sent-p request)
+                     (abort-request-handler +http-not-found+)))
+               (request-aborted (a)
+                 (setf (status-code request) (response-status-code a))
+                 (send-response request (or (body a) (error-body request))))))))
 
       (finish-output (content-stream request))
       (drain-body-stream request)
@@ -358,14 +348,16 @@ different thread than accept-connection is running in."
       (setf (chunked-stream-output-chunking-p content-stream) nil)
       (setf (chunked-stream-input-chunking-p content-stream) nil))))
 
-(defun report-error-to-client (request error &optional backtrace)
+(defun maybe-log-warning (request warning)
+  (when *log-lisp-warnings-p*
+    (log-message request *lisp-warnings-log-level* "~a" warning)))
+
+(defun maybe-log-error (request error backtrace)
   (when *log-lisp-errors-p*
-    (log-message
-     request
-     *lisp-errors-log-level*
-     "~A~@[~%~A~]"
-     error
-     (and *log-lisp-backtraces-p* backtrace)))
+    (log-message request *lisp-errors-log-level* "~a~@[~%~a~]" error
+                 (and *log-lisp-backtraces-p* backtrace))))
+
+(defun report-error-to-client (request error &optional backtrace)
   (setf (status-code request) +http-internal-server-error+)
   (send-response
    request
@@ -497,7 +489,7 @@ no Content-Length header and input chunking is off.")
       ;; that we aren't finished reading from the request stream and
       ;; can't send a reply - to be revisited
       (setf (close-stream-p request) t)
-      (abort-request-handler request +http-bad-request+))))
+      (abort-request-handler +http-bad-request+))))
 
 (defun request-body-stream (request)
   "Return a stream from which the body of the request can be read. If

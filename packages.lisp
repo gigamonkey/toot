@@ -81,8 +81,7 @@
    :handle-if-modified-since
    :handle-range
    :require-authorization
-   :not-handled
-   :maybe-handle
+   :with-response-body
 
    ;; Query the request
    :request-method
