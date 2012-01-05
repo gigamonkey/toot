@@ -99,9 +99,16 @@ restarted with START-ACCEPTOR."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Public API
 
-(defmacro with-response-body ((stream request) &body body)
-  `(let ((,stream (send-headers ,request)))
-     ,@body))
+(defmacro with-response-body ((stream request &rest headers &key &allow-other-keys) &body body)
+  (once-only (request)
+    `(progn
+       ;; When headers is NIL SBCL whines about unreachable code if we
+       ;; generate the LOOP
+       ,@(when headers
+               `((loop for (name value) on (list ,@headers) by #'cddr do
+                      (setf (response-header name ,request) value))))
+       (let ((,stream (send-headers ,request))) ,@body)
+       t)))
 
 (defun response-header (name request)
   "Returns the current value of the outgoing http header named NAME.
