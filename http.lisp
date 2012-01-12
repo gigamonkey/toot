@@ -279,8 +279,8 @@ different thread than accept-connection is running in."
             ;; As we are at the end of the requests here, we ignore
             ;; all errors that may occur while flushing and/or closing
             ;; the stream.
-            (ignore-errors* (force-output content-stream))
-            (ignore-errors* (close content-stream :abort t))))))))
+            (ignore-errors (force-output content-stream))
+            (ignore-errors (close content-stream :abort t))))))))
 
 (defun process-request (request)
   "Process a single request. Called repeatedly by process-connection."
