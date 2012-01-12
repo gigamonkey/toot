@@ -340,7 +340,7 @@ TIME."
   "Get the value of the cookie with the given name sent by the client
 or NIL if no such cookie was sent."
   (when-let (cookie (cdr (assoc name (cookies-in request) :test #'string=)))
-    (slot-value cookie 'value)))
+    cookie))
 
 (defun set-cookie (name request &key (value "") expires path domain secure http-only)
   "Set a cookie to be sent with the reply."

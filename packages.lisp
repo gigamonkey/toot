@@ -105,6 +105,7 @@
 
    ;; Incoming cookies
    :cookie-value
+   :cookies-in
 
    ;; Control the response
    :send-headers
