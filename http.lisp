@@ -408,7 +408,9 @@ by Chunga's read-http-headers method."
              (when (member "100-continue" (split "\\s*,\\s*" expectations) :test #'equalp)
                ;; according to 14.20 in the RFC - we should actually
                ;; check if we have to respond with 417 here
-               (write-simple-response stream +http-continue+)))
+               (let ((s (make-header-stream stream)))
+                 (write-status-line s +http-continue+)
+                 (write-line-crlf s ""))))
            (values headers
                    (as-keyword request-method)
                    url-string
@@ -659,9 +661,9 @@ connection."
 
 (defun write-simple-response (stream status-code &optional headers content)
   (with-open-stream (s (make-header-stream stream))
-    (write-status-line stream status-code)
-    (write-headers stream headers)
-    (write-line-crlf stream "")
+    (write-status-line s status-code)
+    (write-headers s headers)
+    (write-line-crlf s "")
     (when content (write-line-crlf stream content))))
 
 ;; FIXME: technically a HEAD request SHOULD still have a
