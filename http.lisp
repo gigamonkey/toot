@@ -32,7 +32,14 @@
 ;;; on this generic function.
 
 (defgeneric handle-request (handler request)
-  (:documentation "Used by the acceptor to handle a request."))
+  (:documentation "Used by the acceptor to handle a request. Returns
+  true if the handler actually sends a response. (This is arranged by
+  a default :around method. If for some reason a more-specific :around
+  method is defined, it must return the same value."))
+
+(defmethod handle-request :around (handler request)
+  (call-next-method)
+  (response-sent-p request))
 
 (defmethod handle-request ((handler function) request)
   (funcall handler request))
@@ -176,10 +183,6 @@
    (split "\\s*[,;]\\s*" (cdr (assoc :cookie request-headers)))
    +utf-8+))
 
-
-
-
-
 ;;; Convenience methods to pass along log-message calls until we hit the actual logger.
 
 (defmethod log-message ((acceptor acceptor) log-level format-string &rest format-arguments)
@@ -284,8 +287,8 @@ different thread than accept-connection is running in."
 
 (defun process-request (request)
   "Process a single request. Called repeatedly by process-connection."
-  ;; SEND-RESPONSE-HEADERS will throw this after the headers are
-  ;; written if the request was a HEAD request.
+  ;; SEND-RESPONSE-HEADERS will throw HEAD-REQUEST after the headers
+  ;; are written if the request was a HEAD request.
 
   ;; FIXME: should the CATCH be inside the UNWIND-PROTECT? Hmmm.
 
@@ -312,10 +315,8 @@ different thread than accept-connection is running in."
                            (return-from handle-request)))))
            (with-debugger
              (handler-case
-                 (progn
-                   (handle-request (handler (acceptor request)) request)
-                   (unless (headers-sent-p request)
-                     (abort-request-handler +http-not-found+)))
+                 (unless (handle-request (handler (acceptor request)) request)
+                   (abort-request-handler +http-not-found+))
                (request-aborted (a)
                  (setf (status-code request) (response-status-code a))
                  (send-response request (or (body a) (error-body request))))))))
@@ -440,7 +441,9 @@ notation."
 
 ;; Technically, we could allow somone to call request-body-octets and
 ;; later call post-parameters since we could parse the octets that
-;; we've saved. But if they get the stream, all bets are off.
+;; we've saved. But if they get the stream, all bets are off so for
+;; consistency we'll just say you have to pick which form you want to
+;; use.
 
 (defmethod post-parameters :before ((request request))
   "Lazily fill in the post-parameters slot with data from the request body."

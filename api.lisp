@@ -100,6 +100,9 @@ restarted with START-ACCEPTOR."
 ;;; Public API
 
 (defmacro with-response-body ((stream request &rest headers &key &allow-other-keys) &body body)
+  "Send the response headers (any already set plus any more set via
+keyword arguments to this macro) and bind the stream to which the
+response body can be written to STREAM."
   (once-only (request)
     `(progn
        ;; When headers is NIL SBCL whines about unreachable code if we
@@ -146,6 +149,10 @@ created."
        (setf (content-type request) new-value)))
 
     new-value))
+
+(defun response-sent-p (request)
+  "Has a response been sent."
+  (headers-sent-p request))
 
 (defun send-headers (request &key
                      (content-type *default-content-type*)
@@ -220,8 +227,8 @@ Otherwise returns the value of REMOTE-ADDR as the only value."
   "Serve the file denoted by PATHNAME. Sends a content type header
 corresponding to CONTENT-TYPE or (if that is NIL) tries to determine
 the content type via the file's suffix. Aborts the request with 404:
-Not found if the file does not exist. Also handles an
-if-modified-since request appropriately."
+Not found if the file does not exist. Also handles if-modified-since
+and range requests appropriately."
   (when (or (not pathname)
             (wild-pathname-p pathname)
             (not (fad:file-exists-p pathname))
@@ -253,7 +260,8 @@ if-modified-since request appropriately."
           (finish-output out))))))
 
 (defun no-cache (request)
-  "Adds appropriate headers to completely prevent caching on most browsers."
+  "Adds appropriate response headers to completely prevent caching on
+most browsers."
   ;; WTF is this date?! (Some cargo cult thing from PHP or maybe MSDN, it seems.)
   (setf (response-header :expires request) "Mon, 26 Jul 1997 05:00:00 GMT")
   (setf (response-header :cache-control request) "no-store, no-cache, must-revalidate, post-check=0, pre-check=0")
@@ -296,29 +304,29 @@ will be sent as status code."
     (abort-request-handler code))))
 
 (defun require-authorization (request &optional (realm "Toot"))
-  "Sends 401: Authorization Required reply to require basic HTTP
+  "Sends 401: Authorization required reply to require basic HTTP
 authentication (see RFC 2617) for the realm REALM."
   (setf (response-header :www-authenticate request)
         (format nil "Basic realm=\"~A\"" (quote-string realm)))
   (abort-request-handler +http-authorization-required+))
 
 (defun handle-if-modified-since (time request)
-  "Handles the 'If-Modified-Since' header of REQUEST.  The date string
-is compared to the one generated from the supplied universal time
-TIME."
+  "Handles the If-Modified-Since header of REQUEST, sending an '304:
+Not modified' response if the time represented by the UTC TIME is the
+same as the value in the If-Modified-Since header. Also sets the Last
+Modified header in the response to TIME."
   (setf (response-header :last-modified request) (rfc-1123-date time))
   (let ((if-modified-since (request-header :if-modified-since request))
         (time-string (rfc-1123-date time)))
     ;; simple string comparison is sufficient; see RFC 2616 14.25
-    (when (and if-modified-since
-               (equal if-modified-since time-string))
+    (when (and if-modified-since (equal if-modified-since time-string))
       (abort-request-handler +http-not-modified+))))
 
 (defun handle-range (request bytes-available)
   "If the request contains a Range header returns the starting
-  position and the number of bytes to transfer. Otherwise returns 0
-  and bytes-available. An invalid specified range is reported to the
-  client immediately with an HTTP 416 response."
+position and the number of bytes to transfer. Otherwise returns 0 and
+bytes-available. An invalid specified range is reported to the client
+immediately with a '416: Requested range not satisfiable' response."
   (or
    (register-groups-bind (start end)
        ("^bytes (\\d+)-(\\d+)$" (request-header :range request) :sharedp t)
@@ -371,16 +379,20 @@ NAME. Search is case-sensitive."
   ((root :initarg :root :accessor root)
    (path-checker :initarg :path-checker :initform #'safe-pathname-p :accessor path-checker))
 
-  (:documentation "A handler that serves files found under a given root directory."))
+  (:documentation "A handler that serves files found under a given
+  root directory. Checks the path before serving the file with
+  specified path-checker which should be a function that takes the
+  path and returns true if it is safe. If the path checker returns
+  false, the request is aborted with 403: Forbidden."))
 
 (defmethod initialize-instance :after ((h static-file-handler) &key &allow-other-keys)
   (with-slots (root) h
-    (setf root (merge-pathnames root))))
+    (setf root (truename (merge-pathnames root)))))
 
 (defmethod handle-request ((handler static-file-handler) request)
   (with-slots (root path-checker) handler
     (let ((*default-pathname-defaults* root)
-          (path (uri-path (request-uri request))))
+          (path (request-path request)))
       (unless (funcall path-checker path)
         (abort-request-handler +http-forbidden+))
       (serve-file request (merge-pathnames (subseq (add-index path) 1))))))

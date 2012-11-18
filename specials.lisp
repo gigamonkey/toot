@@ -146,7 +146,7 @@ purposes.")
 (defvar *debug-errors-p* t
   "When true, Toot drops into the debugger on unhandled errors.
   Otherwise unhandled errors signaled while processing requests are
-  logged.")
+  logged and a 500 error returned to the client.")
 
 (defconstant +toot-project-url+ "https://github.com/gigamonkey/toot")
 

@@ -82,16 +82,19 @@
    :handle-range
    :require-authorization
    :with-response-body
-
+   ;;:headers-sent-p
+   :response-sent-p
    ;; Query the request
    :request-method
    :request-uri
    :server-protocol
    :request-header
+   :request-headers
    :remote-addr
    :remote-port
    :real-remote-addr
    :authorization
+   :get-parameters
 
    ;; Three ways to get at the body of the request
    :post-parameters
@@ -121,16 +124,19 @@
    :url-encode
    :reason-phrase
 
-   ;; Conditions
-   :toot-condition
-   :toot-error
-   :toot-warning
-   :parameter-error
+   ;; Conditions -- I'm not sure these need to be exported. Does
+   ;; anyone ever need to handle them specifically? If so, I need to
+   ;; understand under what circumstances and document them.
+
+   ;;:toot-condition
+   ;;:toot-error
+   ;;:toot-warning
+   ;;:parameter-error
 
    ;; Taskmaster API
-   :execute-acceptor
-   :handle-incoming-connection
-   :shutdown
+   ;;:execute-acceptor
+   ;;:handle-incoming-connection
+   ;;:shutdown
 
    ;; Special vars
    :*debug-errors-p*
@@ -198,3 +204,7 @@
    :+http-unsupported-media-type+
    :+http-use-proxy+
    :+http-version-not-supported+))
+
+(defpackage :toot-tests
+  (:documentation "Sanity tests for Toot.")
+  (:use :cl :toot))

@@ -27,3 +27,6 @@
 (setf (documentation #'status-code t) "HTTP status code of the response being generated.")
 (setf (documentation #'taskmaster t) "object responsible for running the acceptor.")
 (setf (documentation #'write-timeout t) "timeout for writing to the client.")
+(setf (documentation #'cookies-in t) "cookies sent by the client as an alist.")
+(setf (documentation #'get-parameters t) "parameters sent in the query string.")
+(setf (documentation #'request-headers t) "complete set of headers sent in the request as an alist.")

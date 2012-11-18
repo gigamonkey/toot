@@ -25,7 +25,7 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(in-package :toot)
+(in-package :toot-tests)
 
 (defvar *test-acceptor* nil)
 
@@ -34,7 +34,6 @@
 
 (defun start-test-server (port)
   (setf *test-acceptor* (start-server :port port :handler (test-handler))))
-
 
 (defun start-trivial-server (&key (port 0))
   (setf *test-acceptor* (start-server :port port :handler 'trivial-handler))
@@ -46,24 +45,6 @@
 
 (defun reset-test-handler ()
   (setf (handler *test-acceptor*) (test-handler)))
-
-;;; FIXME: this is perhaps not as correct as it should be. For
-;;; instance, it may not work on windows beacuse of \ vs /. See the
-;;; old create-folder-dispatcher-and-handler to see if there's any
-;;; goodness that needs to be brought over.
-(defun make-static-file-handler (document-root &optional uri-prefix)
-  "Make a handler that maps the requested URI to a file under
-DOCUMENT-ROOT and serves it if it exists. Does a basic sanity check to
-dissalow requests for things like ../../../etc/passwd. Also maps
-directory names to index.html in that directory. If URI-PREFIX is
-supplied, it will strip that from the URI before mapping it to a
-file."
-  (lambda (request)
-    (let ((path (uri-path (request-uri request))))
-      (unless (safe-pathname-p path)
-        (abort-request-handler +http-forbidden+))
-      (let ((file (resolve-file (enough-url path uri-prefix) document-root)))
-        (serve-file request file)))))
 
 (defun enough-url (url url-prefix)
   "Returns the relative portion of URL relative to URL-PREFIX, similar
@@ -90,13 +71,13 @@ to what ENOUGH-NAMESTRING does for pathnames."
 
 (defmethod handle-request ((handler search-handler) request)
   (loop for sub in (handlers handler)
-     do (handle-request sub request) until (headers-sent-p request)))
+     do (handle-request sub request) until (response-sent-p request)))
 
 (defun make-exact-path-handler (path sub-handler)
   "Make a handler that handles the request with SUB-HANDLER if the
 file name of the request is exactly the given PATH."
   (lambda (request)
-    (when (string= path (uri-path (request-uri request)))
+    (when (string= path (request-path request))
       (handle-request sub-handler request))))
 
 (defun test-handler ()
@@ -105,7 +86,7 @@ file name of the request is exactly the given PATH."
    (make-exact-path-handler "/form-test-params" 'form-test-params)
    (make-exact-path-handler "/form-test-octets" 'form-test-octets)
    (make-exact-path-handler "/form-test-stream" 'form-test-stream)
-   (make-static-file-handler (test-document-directory))))
+   (make-instance 'static-file-handler :root (test-document-directory))))
 
 (defun form-test-get-params (request)
   (with-response-body (s request)
@@ -147,7 +128,7 @@ file name of the request is exactly the given PATH."
   (with-response-body (s request)
     (format s "~&<html><head><title>Form test octets</title></head><body>")
     (format s "~&<h1>Form results via <code>body-octets</code></h1>")
-    (format s "~&<p><pre>~a</pre></p>" (escape-for-html (octets-to-string (body-octets request))))
+    (format s "~&<p><pre>~a</pre></p>" (escape-for-html (flexi-streams:octets-to-string (body-octets request))))
     (format s "~&</body></html>")))
 
 (defun form-test-stream (request)
