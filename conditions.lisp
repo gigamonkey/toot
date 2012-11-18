@@ -86,7 +86,8 @@ SETUID for example) is not implemented for a specific Lisp."))
 
 (define-condition request-aborted (toot-condition)
   ((response-status-code :initarg :response-status-code :reader response-status-code)
-   (body :initarg :body :initform nil :reader body)))
+   (body :initarg :body :initform nil :reader body))
+  (:documentation "Signaled internally to cause handling of a request to be aborted and a response sent by Toot itself."))
 
 (defun not-implemented (name)
   "Used to signal an error if an operation named NAME is not implemented."
