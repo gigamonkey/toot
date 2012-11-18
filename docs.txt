@@ -1,16 +1,14 @@
 -*- mode: markup; -*-
 
-* Overview
+* Toot
 
 Toot is intended to be a minimal web server on top of which more
 fully-functional and user-friendly web servers can be used. Toot is
 responsible for accepting network connections, reading and parsing
 HTTP requests, and passing them off to a handler which can then
-generate an HTTP response by either returning a string or writing
-content to a stream. Handlers can also affect the response by setting
-HTTP response headers on the request object they are handed.
-
-* How to use
+generate an HTTP response by writing content to a stream. Handlers can
+also affect the response by setting HTTP response headers on the
+request object they are handed.
 
 ** Generating responses
 
