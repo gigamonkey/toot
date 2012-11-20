@@ -51,7 +51,9 @@ output.")
                :trivial-backtrace
                :usocket
                :bordeaux-threads
-               :puri)
+               :puri
+               #+ecl :sb-bsd-sockets
+               )
   :components ((:file "packages")
                (:file "rfc2388")
                (:file "specials")
